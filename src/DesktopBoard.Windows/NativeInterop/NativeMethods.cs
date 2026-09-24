@@ -34,6 +34,11 @@ internal static partial class NativeMethods
     public const uint SWP_FRAMECHANGED = 0x0020;
     public const uint SWP_SHOWWINDOW = 0x0040;
 
+    public const uint WM_SIZE = 0x0005;
+    public const int SIZE_MINIMIZED = 1;
+    public const int SW_SHOWNOACTIVATE = 4;
+    public const uint LVM_GETITEMCOUNT = 0x1004;
+    public const uint LVM_GETITEMSPACING = 0x1033;
     public const uint WM_WINDOWPOSCHANGING = 0x0046;
     public const uint WM_SYSCOMMAND = 0x0112;
     public const uint WM_SPAWN_WORKER = 0x052C;
@@ -73,6 +78,19 @@ internal static partial class NativeMethods
         public uint flags;
     }
 
+    public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+    public const uint EVENT_SYSTEM_MINIMIZEEND = 0x0017;
+    public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
+    public const uint GW_HWNDNEXT = 2;
+    public const uint GW_HWNDPREV = 3;
+
+    public delegate void WinEventProc(nint hWinEventHook, uint eventType, nint hwnd, int idObject, int idChild, uint idEventThread, uint dwmsEventTime);
+    [DllImport("user32.dll")] public static extern nint SetWinEventHook(uint eventMin, uint eventMax, nint hmodWinEventProc, WinEventProc pfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+    [DllImport("user32.dll")] public static extern bool UnhookWinEvent(nint hWinEventHook);
+    [DllImport("user32.dll")] public static extern nint GetTopWindow(nint hWnd);
+    [DllImport("user32.dll")] public static extern nint GetWindow(nint hWnd, uint uCmd);
+    [DllImport("user32.dll")] public static extern nint GetForegroundWindow();
+
     public delegate bool EnumWindowsProc(nint hWnd, nint lParam);
     public delegate nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam);
 
@@ -82,11 +100,15 @@ internal static partial class NativeMethods
     [DllImport("user32.dll", SetLastError = true)] public static extern nint SetParent(nint hWndChild, nint hWndNewParent);
     [DllImport("user32.dll")] public static extern nint GetParent(nint hWnd);
     [DllImport("user32.dll")] public static extern bool IsWindow(nint hWnd);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(nint hWnd);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(nint hWnd, out RECT lpRect);
     [DllImport("user32.dll", SetLastError = true)] public static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
     [DllImport("user32.dll")] public static extern bool ShowWindow(nint hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern nint SendMessage(nint hWnd, uint Msg, nint wParam, nint lParam);
     [DllImport("user32.dll", SetLastError = true)] public static extern nint SendMessageTimeout(nint hWnd, uint Msg, nint wParam, nint lParam, uint fuFlags, uint uTimeout, out nint lpdwResult);
     [DllImport("user32.dll")] public static extern int GetSystemMetrics(int nIndex);
+    [DllImport("user32.dll")] public static extern uint GetDpiForWindow(nint hWnd);
+    [DllImport("user32.dll")] public static extern uint GetDpiForSystem();
     [DllImport("user32.dll")] public static extern nint MonitorFromPoint(POINT pt, uint dwFlags);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern bool GetMonitorInfo(nint hMonitor, ref MONITORINFO lpmi);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, StringBuilder pvParam, uint fWinIni);

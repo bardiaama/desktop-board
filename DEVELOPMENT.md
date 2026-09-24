@@ -112,27 +112,43 @@ Data lives in `%LOCALAPPDATA%\DesktopBoard\` (`board.db`, `desktopboard.log`).
 
 ## Windows desktop integration (the important decisions)
 
-Goal: desktop icons **above** the board, board **above** the wallpaper, all normal windows
-above both, and the board must survive "Show desktop".
+Goal: the board sits directly above the wallpaper, every application window is above it,
+it never covers the taskbar or the desktop icons, it survives "Show desktop", and it is
+fully interactive.
 
-`DesktopHostService.Attach` tries, in order:
+**Why the board is not behind the desktop icons.** The classic wallpaper trick
+(re-parenting into the shell's `WorkerW` behind `SHELLDLL_DefView`) was implemented and
+verified visually, but Windows routes *all* desktop mouse and keyboard input to the icon
+list view that sits above that layer; windows behind it never receive a click. Live
+wallpaper apps work around this with global hooks that forward synthesized messages, and
+WinUI 3 ignores synthesized legacy mouse messages (it only consumes real pointer input),
+so that path is a dead end for an editable board. The mode is still available as
+`Embedded` (display-only) in Settings.
 
-1. **Embedded** — `WorkerWLocator` sends Progman the undocumented `0x052C` message, which
-   makes the shell create a `WorkerW` window behind the icon view, then re-parents our
-   HWND into it (`WS_CHILD`, `SetParent`, `HWND_BOTTOM`). Two shell layouts are handled:
-   - classic (Windows 7 – 11 23H2): top-level `WorkerW` siblings of Progman; the
-     wallpaper WorkerW is the one *after* the WorkerW that hosts `SHELLDLL_DefView`;
-   - Windows 11 24H2+: `SHELLDLL_DefView` and one `WorkerW` **per monitor** are children
-     of Progman. We parent into that WorkerW (verified on this machine, build 26200).
-   If no WorkerW exists we parent into Progman itself and rely on `HWND_BOTTOM`.
-   Cross-process `SetParent` attaches input queues, so the board keeps receiving mouse
-   and keyboard input.
-2. **BottomMost** — fallback: a normal top-level tool window pinned to the bottom of the
-   Z-order by intercepting `WM_WINDOWPOSCHANGING`; minimize requests are swallowed.
-   Desktop icons are covered in this mode.
+`DesktopHostService.Attach` modes:
+
+1. **BottomMost** (default, `auto`) — a top-level tool window pinned to the bottom of the
+   Z-order by redirecting every `WM_WINDOWPOSCHANGING` to `HWND_BOTTOM`. It is placed
+   over the primary monitor's **work area** (taskbar excluded) minus a left strip for the
+   desktop icons. That strip is measured from the desktop list view (`LVM_GETITEMCOUNT` +
+   `LVM_GETITEMSPACING`, no cross-process memory), assuming auto-arranged columns; the
+   Settings slider adds extra pixels for manually placed icons.
+   *Show desktop* (Win+D) on Windows 11 does not minimize the board (tool window); it
+   raises `Progman` above everything and minimizes the apps, which would hide a
+   bottom-most window. A `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` (out-of-context, no
+   injection) notices the change; while `Progman` has visible windows below it the board
+   is placed directly above `Progman`, and it drops back to `HWND_BOTTOM` when any app
+   comes to the front. Verified with real mouse input on this machine (build 26200).
+2. **Embedded** — `WorkerWLocator` sends Progman `0x052C` and re-parents the HWND into
+   the `WorkerW` behind the icon view. Both shell layouts are handled: classic top-level
+   WorkerW siblings, and Windows 11 24H2+ where `SHELLDLL_DefView` and one `WorkerW` per
+   monitor are children of Progman (the one whose rectangle contains the primary
+   monitor is chosen). Display-only, see above.
 3. **Normal** — a plain borderless window (also what `--size=` uses).
 
 The mode is a setting (`desktop.hostMode`, default `auto`); changing it needs a restart.
+The wallpaper copy behind the cards is laid out over the whole monitor and shifted by
+the window offset, so it continues the real desktop around the board.
 
 After attaching, the window is subclassed (`GWLP_WNDPROC`) for Z-order pinning and to
 swallow minimize. Display changes (dock/undock, resolution, DPI) are detected by

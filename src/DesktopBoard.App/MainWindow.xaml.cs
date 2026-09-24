@@ -29,6 +29,11 @@ public sealed partial class MainWindow : Window
         _settings = App.Current.Services.GetRequiredService<ISettingsService>();
 
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        ApplyInsetSetting();
+        _settings.SettingChanged += (_, key) =>
+        {
+            if (key == SettingKeys.BoardInsetLeft) DispatcherQueue.TryEnqueue(() => { ApplyInsetSetting(); if (_desktopHost.RefreshIfChanged()) ApplyScale(); });
+        };
         ConfigureWindow();
 
         Board.RenderTransform = _scale;
@@ -58,6 +63,13 @@ public sealed partial class MainWindow : Window
     public int TargetHeightPx { get; private set; }
 
     private bool ForcedNormalMode { get; set; }
+
+    /// <summary>The icon strip is measured automatically; the setting adds extra logical pixels.</summary>
+    private void ApplyInsetSetting()
+    {
+        var extraLogical = Math.Clamp(_settings.GetDouble(SettingKeys.BoardInsetLeft, 0), 0, 400);
+        _desktopHost.SetLeftInset(auto: true, extraLogicalPx: (int)Math.Round(extraLogical));
+    }
 
     private void ConfigureWindow()
     {
@@ -185,13 +197,41 @@ public sealed partial class MainWindow : Window
     private void ApplyScale()
     {
         if (Host.ActualWidth <= 0 || Host.ActualHeight <= 0) return;
+        // Automatic scale: the 1920x1080 design must fit both ways, so the smaller ratio wins.
         var chosen = Board.ViewModel.UiScale;
-        var s = chosen > 0 ? Math.Clamp(chosen, 0.5, 2.0) : Math.Clamp(Host.ActualHeight / 1080.0, 0.85, 1.5);
+        var auto = Math.Min(Host.ActualWidth / 1920.0, Host.ActualHeight / 1080.0);
+        var s = chosen > 0 ? Math.Clamp(chosen, 0.5, 2.0) : Math.Clamp(auto, 0.6, 1.6);
         Board.ViewModel.EffectiveUiScale = s;
         _scale.ScaleX = s;
         _scale.ScaleY = s;
         Board.Width = Host.ActualWidth / s;
         Board.Height = Host.ActualHeight / s;
+        AlignWallpaper(s);
+    }
+
+    /// <summary>
+    /// Lays the wallpaper copy out over the whole monitor (in board units) so the image behind
+    /// the cards continues the real desktop around the window instead of being re-scaled to it.
+    /// </summary>
+    private void AlignWallpaper(double scale)
+    {
+        try
+        {
+            var dpi = Content?.XamlRoot?.RasterizationScale ?? 1.0;
+            if (dpi <= 0) dpi = 1.0;
+            var mon = _desktopHost.GetPrimaryMonitorBounds();
+            var win = _desktopHost.CurrentMode == DesktopHostMode.Normal
+                ? (X: mon.X, Y: mon.Y, Width: mon.Width, Height: mon.Height)
+                : _desktopHost.GetTargetBounds();
+            var units = dpi * scale; // physical px per board unit
+            Board.ViewModel.WallpaperWidth = mon.Width / units;
+            Board.ViewModel.WallpaperHeight = mon.Height / units;
+            Board.ViewModel.WallpaperMargin = new Thickness(-(win.X - mon.X) / units, -(win.Y - mon.Y) / units, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn("Wallpaper alignment failed: " + ex.Message);
+        }
     }
 
     private bool _flushed;

@@ -134,10 +134,13 @@
 
     <Grid x:Name="Root" Background="{StaticResource BoardBackdropBrush}">
         <!-- wallpaper + darkening overlay -->
-        <Image Source="{x:Bind ViewModel.BackgroundImage, Mode=OneWay}" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <Image Source="{x:Bind ViewModel.BackgroundImage, Mode=OneWay}" Stretch="UniformToFill"
+               HorizontalAlignment="Left" VerticalAlignment="Top"
+               Width="{x:Bind ViewModel.WallpaperWidth, Mode=OneWay}" Height="{x:Bind ViewModel.WallpaperHeight, Mode=OneWay}"
+               Margin="{x:Bind ViewModel.WallpaperMargin, Mode=OneWay}" />
         <Rectangle Fill="#050A14" Opacity="{x:Bind ViewModel.Darkness, Mode=OneWay}" />
 
-        <Grid x:Name="Board" Padding="{x:Bind fx:Fx.BoardPadding(ViewModel.InsetLeft), Mode=OneWay}">
+        <Grid x:Name="Board" Padding="24,14,24,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -204,7 +207,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="0.95*" />
                         <RowDefinition Height="1.25*" />
-                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="0.62*" MinHeight="132" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="1.1*" />
@@ -287,7 +290,7 @@
 
                     <controls:BoardCard Grid.Row="3" Grid.ColumnSpan="2" Icon="&#xEA86;" Title="{x:Bind ViewModel.Strings.Ideas, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.IdeasSub, Mode=OneWay}"
                                         Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">
-                        <controls:StickyBoardControl ViewModel="{x:Bind ViewModel.WorkIdeas}" Height="112" />
+                        <controls:StickyBoardControl ViewModel="{x:Bind ViewModel.WorkIdeas}" />
                     </controls:BoardCard>
                 </Grid>
 
@@ -308,7 +311,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="0.95*" />
                         <RowDefinition Height="1.25*" />
-                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="0.62*" MinHeight="132" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -372,7 +375,7 @@
                         </Grid.ColumnDefinitions>
                         <controls:BoardCard Grid.Column="0" Style="{StaticResource PersonalCard}" Icon="&#xE734;" Title="{x:Bind ViewModel.Strings.IdeasPlans, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.IdeasPlansSub, Mode=OneWay}"
                                             Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">
-                            <controls:StickyBoardControl ViewModel="{x:Bind ViewModel.PersonalIdeas}" Height="112" />
+                            <controls:StickyBoardControl ViewModel="{x:Bind ViewModel.PersonalIdeas}" />
                         </controls:BoardCard>
                         <controls:BoardCard Grid.Column="1" Style="{StaticResource PersonalCard}" Icon="&#xE81C;" Title="{x:Bind ViewModel.Strings.FutureTasks, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.FutureTasksSub, Mode=OneWay}"
                                             Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">

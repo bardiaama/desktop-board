@@ -125,11 +125,11 @@ public sealed partial class UiStrings : ObservableObject
     public string DefaultLocked => T("شروع در حالت قفل", "Start locked");
     public string HoldToUnlockSetting => T("نگه‌داشتن برای باز کردن قفل", "Hold to unlock");
     public string GlassEffect => T("افکت شیشه‌ای کارت‌ها", "Glass effect on cards");
-    public string InsetLeft => T("فاصله از آیکون‌های دسکتاپ (چپ)", "Left inset for desktop icons");
+    public string InsetLeft => T("فاصله اضافی از آیکون‌های دسکتاپ (چپ)", "Extra left inset for desktop icons");
     public string DesktopMode => T("حالت نمایش روی دسکتاپ", "Desktop mode");
-    public string ModeAuto => T("خودکار", "Automatic");
-    public string ModeEmbedded => T("داخل دسکتاپ (پشت آیکون‌ها)", "Embedded (behind icons)");
-    public string ModeBottomMost => T("زیر همه پنجره‌ها", "Bottom-most window");
+    public string ModeAuto => T("خودکار (روی دسکتاپ، تعاملی)", "Automatic (on the desktop, interactive)");
+    public string ModeEmbedded => T("پشت آیکون‌ها (فقط نمایش، بدون کلیک)", "Behind icons (display only, no clicks)");
+    public string ModeBottomMost => T("روی دسکتاپ، زیر همه پنجره‌ها", "On the desktop, below all windows");
     public string ModeNormal => T("پنجره عادی", "Normal window");
     public string ResetLayout => T("بازنشانی چیدمان", "Reset layout");
     public string ExportBackup => T("خروجی پشتیبان …", "Export backup …");

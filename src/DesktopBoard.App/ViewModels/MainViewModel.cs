@@ -95,6 +95,13 @@ public sealed partial class MainViewModel : ObservableObject
 
     [ObservableProperty] private bool _holdToUnlock = true;
     [ObservableProperty] private ImageSource? _backgroundImage;
+    /// <summary>
+    /// The wallpaper copy is laid out as if it covered the whole monitor (in board units) and
+    /// shifted by the window's offset, so it lines up with the real desktop around the board.
+    /// </summary>
+    [ObservableProperty] private double _wallpaperWidth = double.NaN;
+    [ObservableProperty] private double _wallpaperHeight = double.NaN;
+    [ObservableProperty] private Microsoft.UI.Xaml.Thickness _wallpaperMargin;
     [ObservableProperty] private double _darkness = 0.45;
     /// <summary>User-chosen UI scale; 0 means automatic (from screen height).</summary>
     [ObservableProperty] private double _uiScale;

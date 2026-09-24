@@ -44,11 +44,15 @@ public interface IBackupService
 
 public enum DesktopHostMode
 {
-    /// <summary>Try Embedded first, then BottomMost.</summary>
+    /// <summary>BottomMost (interactive) with Normal as the fallback.</summary>
     Auto = 0,
-    /// <summary>Window is re-parented into the desktop (WorkerW) layer, behind desktop icons.</summary>
+    /// <summary>
+    /// Window is re-parented into the desktop (WorkerW) layer, behind desktop icons.
+    /// Display-only: Windows delivers no mouse or keyboard input to windows behind the
+    /// icon layer, so the board can be looked at but not edited in this mode.
+    /// </summary>
     Embedded = 1,
-    /// <summary>Normal top-level window that is kept at the bottom of the Z-order.</summary>
+    /// <summary>Top-level window kept at the bottom of the Z-order, directly above the wallpaper. Fully interactive.</summary>
     BottomMost = 2,
     /// <summary>A plain borderless window. No shell integration.</summary>
     Normal = 3
@@ -64,8 +68,18 @@ public interface IDesktopHostService
 {
     DesktopHostResult Attach(nint hwnd, DesktopHostMode requestedMode);
     void Detach(nint hwnd);
-    /// <summary>Full bounds (in physical pixels) of the monitor the board should cover.</summary>
+    /// <summary>
+    /// Bounds (physical pixels) the board should cover: the primary monitor's work area
+    /// (taskbar excluded) minus the left strip reserved for desktop icons.
+    /// </summary>
     (int X, int Y, int Width, int Height) GetTargetBounds();
+    /// <summary>
+    /// Left strip to leave free for desktop icons: measured from the icon grid when
+    /// <paramref name="auto"/> is true, plus <paramref name="extraLogicalPx"/> (DPI-scaled).
+    /// </summary>
+    void SetLeftInset(bool auto, int extraLogicalPx);
+    /// <summary>Full bounds (physical pixels) of the primary monitor, used to align the wallpaper copy.</summary>
+    (int X, int Y, int Width, int Height) GetPrimaryMonitorBounds();
     DesktopHostMode CurrentMode { get; }
     /// <summary>
     /// Re-fits the window if the monitor geometry changed or the shell replaced its host

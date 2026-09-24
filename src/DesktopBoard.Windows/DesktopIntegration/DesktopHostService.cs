@@ -6,20 +6,23 @@ using static DesktopBoard.Windows.NativeInterop.NativeMethods;
 namespace DesktopBoard.Windows.DesktopIntegration;
 
 /// <summary>
-/// Puts the board window into the desktop layer. See <see cref="WorkerWLocator"/> for the
-/// shell mechanics. Every Win32 call is contained here so the rest of the app only sees
-/// <see cref="IDesktopHostService"/>.
+/// Puts the board window into the desktop layer. Every Win32 call is contained here so the
+/// rest of the app only sees <see cref="IDesktopHostService"/>.
 ///
-/// After attaching, the window is subclassed so that:
-///   * in BottomMost mode the window is pinned to the bottom of the Z-order;
-///   * minimize requests (e.g. "Show desktop" in fallback mode) are ignored;
-///   * display / DPI messages re-fit the board where they are delivered (top-level modes).
+/// Modes:
+///   * <b>BottomMost</b> (default): a top-level tool window pinned to the bottom of the
+///     Z-order by intercepting WM_WINDOWPOSCHANGING, sized to the monitor's work area
+///     (taskbar excluded) minus the strip occupied by desktop icons. It receives input
+///     like any window, stays under every other application, and un-minimizes itself
+///     after "Show desktop".
+///   * <b>Embedded</b>: re-parented into the shell's WorkerW behind the icon layer (see
+///     <see cref="WorkerWLocator"/>). Looks like part of the wallpaper but Windows routes
+///     all desktop input to the icon list view above it, so it is display-only.
+///   * <b>Normal</b>: a plain borderless window (used by --size= previews).
 ///
-/// WM_DISPLAYCHANGE / WM_DPICHANGED are never delivered to a WS_CHILD window, so in the
-/// Embedded mode the window itself cannot notice a dock/undock or resolution change.
-/// The app therefore also calls <see cref="RefreshIfChanged"/> from a slow UI timer; it
-/// compares the current monitor geometry and host window with what was last applied and
-/// only touches the window when something differs.
+/// A WS_CHILD window never receives WM_DISPLAYCHANGE, and a bottom-most window may miss
+/// it while another app is foreground, so <see cref="RefreshIfChanged"/> is also polled
+/// from a slow UI timer; it only touches the window when geometry actually changed.
 /// </summary>
 public sealed class DesktopHostService : IDesktopHostService
 {
@@ -35,8 +38,19 @@ public sealed class DesktopHostService : IDesktopHostService
     private (int X, int Y, int Width, int Height) _applied;
     private nint _appliedParent;
     private (int X, int Y, int Width, int Height)? _fixedBounds;
+    private bool _autoInset = true;
+    private int _extraInsetLogical;
+    private WinEventProc? _winEventProc;   // kept alive while the hook is installed
+    private nint _winEventHook;
+    private bool _desktopRaised;
 
     public DesktopHostMode CurrentMode { get; private set; } = DesktopHostMode.Normal;
+
+    public void SetLeftInset(bool auto, int extraLogicalPx)
+    {
+        _autoInset = auto;
+        _extraInsetLogical = Math.Max(0, extraLogicalPx);
+    }
 
     public DesktopHostResult Attach(nint hwnd, DesktopHostMode requestedMode)
     {
@@ -46,7 +60,7 @@ public sealed class DesktopHostService : IDesktopHostService
         _hwnd = hwnd;
         var detail = string.Empty;
 
-        if (requestedMode is DesktopHostMode.Auto or DesktopHostMode.Embedded)
+        if (requestedMode is DesktopHostMode.Embedded)
         {
             try
             {
@@ -72,7 +86,8 @@ public sealed class DesktopHostService : IDesktopHostService
                 ApplyBottomMost(hwnd);
                 CurrentMode = DesktopHostMode.BottomMost;
                 InstallSubclass(hwnd);
-                return new DesktopHostResult(CurrentMode, detail + "Running as a bottom-most desktop window.");
+                InstallShowDesktopWatch();
+                return new DesktopHostResult(CurrentMode, detail + $"Bottom-most desktop window over the work area {_applied.Width}x{_applied.Height} at ({_applied.X},{_applied.Y}).");
             }
             catch (Exception ex)
             {
@@ -90,6 +105,7 @@ public sealed class DesktopHostService : IDesktopHostService
 
     public void Detach(nint hwnd)
     {
+        RemoveShowDesktopWatch();
         RemoveSubclass();
         if (hwnd == nint.Zero || !IsWindow(hwnd)) return;
         if (GetParent(hwnd) != nint.Zero)
@@ -105,19 +121,29 @@ public sealed class DesktopHostService : IDesktopHostService
 
     public (int X, int Y, int Width, int Height) GetTargetBounds()
     {
-        var mi = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
-        var hmon = MonitorFromPoint(new POINT { X = 0, Y = 0 }, MONITOR_DEFAULTTOPRIMARY);
-        if (hmon != nint.Zero && GetMonitorInfo(hmon, ref mi))
-        {
-            var r = mi.rcMonitor;
-            return (r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
-        }
-        return (0, 0, GetSystemMetrics(0), GetSystemMetrics(1));
+        var (mx, my, mw, mh, wx, wy, ww, wh) = PrimaryMonitor();
+        // Embedded windows live under the taskbar anyway; interactive modes stay inside the work area.
+        var (x, y, w, h) = CurrentMode == DesktopHostMode.Embedded ? (mx, my, mw, mh) : (wx, wy, ww, wh);
+
+        var dpi = _hwnd != nint.Zero && IsWindow(_hwnd) ? GetDpiForWindow(_hwnd) : GetDpiForSystem();
+        var inset = (int)Math.Round(_extraInsetLogical * Math.Max(96u, dpi) / 96.0);
+        if (_autoInset && CurrentMode != DesktopHostMode.Embedded)
+            inset += DesktopIconsService.GetOccupiedLeftWidth(wh);
+        inset = Math.Clamp(inset, 0, w / 3);
+
+        return (x + inset, y, w - inset, h);
+    }
+
+    public (int X, int Y, int Width, int Height) GetPrimaryMonitorBounds()
+    {
+        var (mx, my, mw, mh, _, _, _, _) = PrimaryMonitor();
+        return (mx, my, mw, mh);
     }
 
     public bool RefreshIfChanged()
     {
         if (_hwnd == nint.Zero || !IsWindow(_hwnd) || CurrentMode == DesktopHostMode.Normal) return false;
+        if (CurrentMode == DesktopHostMode.BottomMost) UpdateShowDesktopState();
         var target = GetTargetBounds();
         var parent = GetParent(_hwnd);
         var parentOk = CurrentMode != DesktopHostMode.Embedded || (parent != nint.Zero && IsWindow(parent) && parent == _appliedParent);
@@ -128,10 +154,25 @@ public sealed class DesktopHostService : IDesktopHostService
 
     // ---------------------------------------------------------------------------------
 
+    private static (int mx, int my, int mw, int mh, int wx, int wy, int ww, int wh) PrimaryMonitor()
+    {
+        var mi = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        var hmon = MonitorFromPoint(new POINT { X = 0, Y = 0 }, MONITOR_DEFAULTTOPRIMARY);
+        if (hmon != nint.Zero && GetMonitorInfo(hmon, ref mi))
+        {
+            var m = mi.rcMonitor;
+            var w = mi.rcWork;
+            return (m.Left, m.Top, m.Right - m.Left, m.Bottom - m.Top, w.Left, w.Top, w.Right - w.Left, w.Bottom - w.Top);
+        }
+        var cx = GetSystemMetrics(0);
+        var cy = GetSystemMetrics(1);
+        return (0, 0, cx, cy, 0, 0, cx, cy);
+    }
+
     private (bool Ok, string Detail) TryEmbed(nint hwnd)
     {
-        var target = GetTargetBounds();
-        var located = WorkerWLocator.Locate(target);
+        var (mx, my, mw, mh, _, _, _, _) = PrimaryMonitor();
+        var located = WorkerWLocator.Locate((mx, my, mw, mh));
         if (located is null) return (false, "Progman / WorkerW not found");
 
         var style = GetWindowLongPtr(hwnd, GWL_STYLE).ToInt64();
@@ -148,7 +189,6 @@ public sealed class DesktopHostService : IDesktopHostService
         if (previous == nint.Zero && Marshal.GetLastWin32Error() != 0)
         {
             var err = Marshal.GetLastWin32Error();
-            // Undo the style change so the fallback modes get a sane window.
             SetWindowLongPtr(hwnd, GWL_STYLE, (nint)((style & ~WS_CHILD) | WS_POPUP));
             return (false, $"SetParent failed (Win32 error {err})");
         }
@@ -160,16 +200,15 @@ public sealed class DesktopHostService : IDesktopHostService
             return (false, "SetParent did not take effect");
         }
 
+        CurrentMode = DesktopHostMode.Embedded;
         FitEmbedded(hwnd);
-        return (true, $"Embedded in desktop ({located.Layout} layout, WorkerW 0x{located.WorkerW.ToInt64():X}).");
+        return (true, $"Embedded in desktop ({located.Layout} layout, WorkerW 0x{located.WorkerW.ToInt64():X}). Display-only: the icon layer takes all desktop input.");
     }
 
     /// <summary>
-    /// Sizes the embedded child to the primary monitor. Child coordinates are relative to
-    /// the parent's client area; the classic (top-level) WorkerW starts at the virtual-screen
-    /// origin, while the 24H2 per-monitor WorkerW starts at its own monitor's origin.
-    /// Bottom of the parent's child Z-order keeps us behind the icon view when the parent is
-    /// Progman itself (24H2 "progman-direct" layout).
+    /// Sizes the embedded child. Child coordinates are relative to the parent's client area;
+    /// the classic (top-level) WorkerW starts at the virtual-screen origin, the 24H2
+    /// per-monitor WorkerW at its own monitor's origin.
     /// </summary>
     private void FitEmbedded(nint hwnd)
     {
@@ -194,6 +233,7 @@ public sealed class DesktopHostService : IDesktopHostService
 
     private void ApplyBottomMost(nint hwnd)
     {
+        CurrentMode = DesktopHostMode.BottomMost;
         var target = GetTargetBounds();
         var (x, y, w, h) = target;
 
@@ -207,10 +247,6 @@ public sealed class DesktopHostService : IDesktopHostService
         _appliedParent = nint.Zero;
     }
 
-    /// <summary>
-    /// Re-fits the board after the display configuration changed. If the shell replaced its
-    /// WorkerW (explorer does this on some display changes) the window is re-parented.
-    /// </summary>
     private void Refresh()
     {
         if (_refreshing || _hwnd == nint.Zero || !IsWindow(_hwnd)) return;
@@ -222,7 +258,8 @@ public sealed class DesktopHostService : IDesktopHostService
                 case DesktopHostMode.Embedded:
                 {
                     var parent = GetParent(_hwnd);
-                    var located = WorkerWLocator.Locate(GetTargetBounds());
+                    var (mx, my, mw, mh, _, _, _, _) = PrimaryMonitor();
+                    var located = WorkerWLocator.Locate((mx, my, mw, mh));
                     if (located is not null && located.WorkerW != parent && IsWindow(located.WorkerW))
                     {
                         SetParent(_hwnd, located.WorkerW);
@@ -240,7 +277,6 @@ public sealed class DesktopHostService : IDesktopHostService
                     break;
                 }
                 default:
-                    // Normal mode keeps the size the app chose (e.g. a --size= preview).
                     if (_fixedBounds is { } fb)
                         SetWindowPos(_hwnd, nint.Zero, fb.X, fb.Y, fb.Width, fb.Height, SWP_NOACTIVATE | SWP_NOZORDER | SWP_FRAMECHANGED);
                     return;
@@ -255,6 +291,72 @@ public sealed class DesktopHostService : IDesktopHostService
         {
             _refreshing = false;
         }
+    }
+
+    // ---- "Show desktop" (Win+D) --------------------------------------------------------
+    // Windows 11 implements Show desktop by raising Progman to the top of the Z-order and
+    // minimizing the app windows; a bottom-most window would end up hidden under the
+    // desktop. A foreground-change WinEvent (no polling, no injection) tells us when that
+    // happens: while the desktop is raised the board is placed directly above Progman,
+    // and it drops back to the bottom as soon as any other window comes to the front.
+
+    private void InstallShowDesktopWatch()
+    {
+        RemoveShowDesktopWatch();
+        _winEventProc = OnWinEvent;
+        _winEventHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND, nint.Zero, _winEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+        UpdateShowDesktopState();
+    }
+
+    private void RemoveShowDesktopWatch()
+    {
+        if (_winEventHook != nint.Zero) UnhookWinEvent(_winEventHook);
+        _winEventHook = nint.Zero;
+        _winEventProc = null;
+    }
+
+    private void OnWinEvent(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        if (eventType is EVENT_SYSTEM_FOREGROUND or EVENT_SYSTEM_MINIMIZEEND) UpdateShowDesktopState();
+    }
+
+    /// <summary>
+    /// True while Show desktop is active: the shell has raised Progman, so other (minimized)
+    /// app windows now sit *below* it in the Z-order. Normally Progman is the very last window.
+    /// The board itself is ignored because it deliberately moves above Progman in that state.
+    /// </summary>
+    private bool IsDesktopRaised()
+    {
+        var progman = FindWindow("Progman", null);
+        if (progman == nint.Zero) return false;
+        var w = GetWindow(progman, GW_HWNDNEXT);
+        var guard = 0;
+        while (w != nint.Zero && guard++ < 4096)
+        {
+            if (w != _hwnd && IsWindowVisible(w)) return true;
+            w = GetWindow(w, GW_HWNDNEXT);
+        }
+        return false;
+    }
+
+    private void UpdateShowDesktopState()
+    {
+        if (_hwnd == nint.Zero || !IsWindow(_hwnd) || CurrentMode != DesktopHostMode.BottomMost) return;
+        var raised = IsDesktopRaised();
+        if (raised == _desktopRaised) return;
+        _desktopRaised = raised;
+        if (raised)
+        {
+            // Directly above the raised desktop: below whatever precedes Progman (topmost band), else top.
+            var progman = FindWindow("Progman", null);
+            var above = progman == nint.Zero ? nint.Zero : GetWindow(progman, GW_HWNDPREV);
+            SetWindowPos(_hwnd, above == nint.Zero ? HWND_TOP : above, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+        else
+        {
+            SetWindowPos(_hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+        Logger.Info(raised ? "Desktop host: Show desktop active, board raised above Progman." : "Desktop host: board back at the bottom.");
     }
 
     private void InstallSubclass(nint hwnd)
@@ -278,8 +380,9 @@ public sealed class DesktopHostService : IDesktopHostService
     {
         switch (msg)
         {
-            case WM_WINDOWPOSCHANGING when CurrentMode == DesktopHostMode.BottomMost:
+            case WM_WINDOWPOSCHANGING when CurrentMode == DesktopHostMode.BottomMost && !_desktopRaised:
             {
+                // Any Z-order change (activation, another app's SetWindowPos) is redirected to the bottom.
                 var pos = Marshal.PtrToStructure<WINDOWPOS>(lParam);
                 if ((pos.flags & SWP_NOZORDER) == 0)
                 {
@@ -290,6 +393,16 @@ public sealed class DesktopHostService : IDesktopHostService
             }
             case WM_SYSCOMMAND when CurrentMode != DesktopHostMode.Normal && (wParam.ToInt64() & 0xFFF0) == SC_MINIMIZE:
                 return nint.Zero;
+            case WM_SIZE when CurrentMode == DesktopHostMode.BottomMost && wParam.ToInt64() == SIZE_MINIMIZED:
+            {
+                // "Show desktop" (Win+D) minimizes every top-level window; the board is part of
+                // the desktop, so it comes straight back without taking activation.
+                var result = CallWindowProc(_originalWndProc, hWnd, msg, wParam, lParam);
+                ShowWindow(hWnd, SW_SHOWNOACTIVATE);
+                var (x, y, w, h) = _applied;
+                SetWindowPos(hWnd, HWND_BOTTOM, x, y, w, h, SWP_NOACTIVATE);
+                return result;
+            }
             case WM_DISPLAYCHANGE:
             case WM_DPICHANGED:
             case WM_DPICHANGED_AFTERPARENT:

@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Version from tag
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart("v")
+          if ($v -notmatch '^\d+\.\d+\.\d+') { $v = "0.0.0" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Test
+        run: dotnet test tests/DesktopBoard.Tests -c Release --nologo
+
+      - name: Publish (self-contained x64)
+        run: >
+          dotnet publish src/DesktopBoard.App -c Release -r win-x64 --self-contained true
+          -p:Platform=x64 -p:Version=${{ steps.ver.outputs.version }} -o publish --nologo
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.ver.outputs.version }} /DPublishDir=..\publish installer\DesktopBoard.iss
+
+      - name: Portable zip
+        shell: pwsh
+        run: Compress-Archive -Path publish\* -DestinationPath dist\DesktopBoard-Portable-${{ steps.ver.outputs.version }}-win-x64.zip
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: DesktopBoard-${{ steps.ver.outputs.version }}
+          path: dist/*
+
+      - name: GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

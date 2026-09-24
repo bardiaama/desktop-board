@@ -133,6 +133,8 @@ public sealed partial class MainWindow : Window
             var parts = sizeArg["--size=".Length..].Split('x');
             if (parts.Length == 2 && int.TryParse(parts[0], out var pw) && int.TryParse(parts[1], out var ph))
             {
+                x = 0;
+                y = 0;
                 w = pw;
                 h = ph;
                 ForcedNormalMode = true;

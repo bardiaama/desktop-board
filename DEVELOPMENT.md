@@ -185,6 +185,23 @@ person a day):
 - `ReleasePointerCapture` synchronously raises `PointerCaptureLost`; read state before
   releasing.
 
+## Installer, CI and releases
+
+- `installer/DesktopBoard.iss` (Inno Setup 6) packages the self-contained publish output
+  into a per-user installer (`%LOCALAPPDATA%\Programs\DesktopBoard`, no admin). It offers
+  Start Menu / desktop shortcuts and an autostart task. Uninstall runs
+  `DesktopBoard.exe --uninstall-cleanup` (restores the shell desktop icons, removes the Run
+  key), stops the app, then asks whether to delete `%LOCALAPPDATA%\DesktopBoard`.
+- `DESKTOPBOARD_DATA_DIR` overrides the data folder (portable use, demos, tests).
+- `.github/workflows/ci.yml` runs the tests and a Release build on every push / PR.
+- `.github/workflows/release.yml` builds the installer and a portable zip for every `v*`
+  tag and attaches them to the GitHub release. Locally:
+
+```powershell
+dotnet publish src/DesktopBoard.App -c Release -r win-x64 --self-contained true -p:Platform=x64 -o publish
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\DesktopBoard.iss   # → dist\DesktopBoard-Setup-<ver>.exe
+```
+
 ## Startup with Windows
 
 `StartupService` writes `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DesktopBoard`

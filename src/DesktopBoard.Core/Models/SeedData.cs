@@ -23,7 +23,7 @@ public static class SeedData
         s.Projects.Add(new Project { Name = "GSM Module", Color = "#3B82F6", Status = ProjectStatus.Active, Progress = 70, SortOrder = order++ });
         s.Projects.Add(new Project { Name = "eSIM Integration", Color = "#22C55E", Status = ProjectStatus.Active, Progress = 35, SortOrder = order++ });
         s.Projects.Add(new Project { Name = "Ticketing System", Color = "#EAB308", Status = ProjectStatus.Active, Progress = 50, SortOrder = order++ });
-        s.Projects.Add(new Project { Name = "RIMAEX Content", Color = "#A855F7", Status = ProjectStatus.Active, SortOrder = order++ });
+        s.Projects.Add(new Project { Name = "Website Content", Color = "#A855F7", Status = ProjectStatus.Active, SortOrder = order++ });
 
         order = 0;
         var workToday = new (string Title, string? Time, bool Done)[]
@@ -43,13 +43,13 @@ public static class SeedData
             });
 
         order = 0;
-        foreach (var t in new[] { "ورزش عصر", "مطالعه کتاب", "پیگیری کارت اقامت عمان", "بررسی برنامه سفر", "تماس با خانواده", "مرور برنامه هفته" })
+        foreach (var t in new[] { "ورزش عصر", "مطالعه کتاب", "پیگیری مدارک", "بررسی برنامه سفر", "تماس با خانواده", "مرور برنامه هفته" })
             s.Tasks.Add(new TaskItem { Title = t, Section = Section.Personal, Category = TaskCategory.Today, IsCompleted = t == "مطالعه کتاب", DueDate = today, SortOrder = order++ });
 
         // "This week": one item per weekday starting Saturday (Persian week).
         order = 0;
         var weekStart = StartOfPersianWeek(today);
-        var week = new[] { "تمدید اکانت کلود", "بررسی بلیت مسقط", "خرید وسایل سفر", "مراجعه به پزشک", "تمرین زبان آلمانی", "دیدار با دوست", "استراحت" };
+        var week = new[] { "تمدید اکانت کلود", "بررسی بلیت سفر", "خرید وسایل سفر", "مراجعه به پزشک", "تمرین زبان آلمانی", "دیدار با دوست", "استراحت" };
         var weekColors = new[] { "#3B82F6", "#EAB308", "#22C55E", "#A855F7", "#EC4899", "#3B82F6", "#9CA3AF" };
         for (var i = 0; i < week.Length; i++)
             s.Tasks.Add(new TaskItem
@@ -83,8 +83,8 @@ public static class SeedData
         s.StickyNotes.Add(new StickyNote { Content = "طراحی اپ موبایل\nیکپارچه", Section = Section.Work, Color = "cyan", PositionX = 336, PositionY = 8, Rotation = -1 });
         s.StickyNotes.Add(new StickyNote { Content = "بررسی بازار\nخارجی", Section = Section.Work, Color = "green", PositionX = 500, PositionY = 5, Rotation = 2 });
 
-        s.StickyNotes.Add(new StickyNote { Content = "سفر مسقط\n(بررسی مسیر)", Section = Section.Personal, Color = "pink", PositionX = 8, PositionY = 6, Rotation = -1.5 });
-        s.StickyNotes.Add(new StickyNote { Content = "خرید نمایشگاه\nالکامپ", Section = Section.Personal, Color = "cyan", PositionX = 172, PositionY = 4, Rotation = 1 });
+        s.StickyNotes.Add(new StickyNote { Content = "سفر تعطیلات\n(بررسی مسیر)", Section = Section.Personal, Color = "pink", PositionX = 8, PositionY = 6, Rotation = -1.5 });
+        s.StickyNotes.Add(new StickyNote { Content = "خرید از نمایشگاه\nمحلی", Section = Section.Personal, Color = "cyan", PositionX = 172, PositionY = 4, Rotation = 1 });
         s.StickyNotes.Add(new StickyNote { Content = "راه‌اندازی\nپروژه جدید", Section = Section.Personal, Color = "yellow", PositionX = 336, PositionY = 8, Rotation = -2 });
 
         return s;

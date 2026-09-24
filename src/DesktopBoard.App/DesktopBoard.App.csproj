@@ -23,7 +23,7 @@
     <EnableDefaultPageItems>true</EnableDefaultPageItems>
     <Version>0.1.0</Version>
     <Product>Desktop Board</Product>
-    <Company>RIMA</Company>
+    <Company>Desktop Board</Company>
   </PropertyGroup>
 
   <ItemGroup>

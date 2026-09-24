@@ -16,6 +16,10 @@ Generated Files/
 AppPackages/
 BundleArtifacts/
 
+## Installer / publish output
+publish/
+dist/
+
 ## NuGet
 *.nupkg
 packages/

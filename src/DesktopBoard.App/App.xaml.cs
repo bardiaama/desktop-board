@@ -27,9 +27,14 @@ public partial class App : Application
 
     public IServiceProvider Services { get; }
 
-    /// <summary>%LOCALAPPDATA%\DesktopBoard - database, log and settings live here.</summary>
+    /// <summary>
+    /// %LOCALAPPDATA%\DesktopBoard - database, log and settings live here. The
+    /// DESKTOPBOARD_DATA_DIR environment variable overrides it (portable use, tests, demos).
+    /// </summary>
     public static string DataDirectory { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopBoard");
+        Environment.GetEnvironmentVariable("DESKTOPBOARD_DATA_DIR") is { Length: > 0 } custom
+            ? custom
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopBoard");
 
     public static string DatabasePath => Path.Combine(DataDirectory, "board.db");
 
@@ -54,6 +59,17 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // Run by the uninstaller (and usable by hand): give the desktop its icons back and
+        // remove the Run key, then exit without showing the board.
+        if (Environment.GetCommandLineArgs().Any(a => a.Equals("--uninstall-cleanup", StringComparison.OrdinalIgnoreCase)))
+        {
+            try { Services.GetRequiredService<IShellIconsService>().SetVisible(true); } catch (Exception ex) { Logger.Warn("cleanup: icons " + ex.Message); }
+            try { Services.GetRequiredService<IStartupService>().SetEnabled(false); } catch (Exception ex) { Logger.Warn("cleanup: startup " + ex.Message); }
+            Logger.Info("Uninstall cleanup done.");
+            Exit();
+            return;
+        }
+
         try
         {
             await Services.GetRequiredService<IDatabaseInitializer>().InitializeAsync();

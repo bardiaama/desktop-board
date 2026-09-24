@@ -13,16 +13,25 @@ public sealed partial class UiStrings : ObservableObject
 {
     private readonly ISettingsService _settings;
 
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue? _dispatcher;
+
     public UiStrings(ISettingsService settings)
     {
         _settings = settings;
+        _dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         Language = settings.GetString(SettingKeys.Language, "bilingual") ?? "bilingual";
+        // SettingChanged is raised on a thread-pool thread; bindings must be updated on the UI thread.
         settings.SettingChanged += (_, key) =>
         {
-            if (key == SettingKeys.Language)
-                Language = settings.GetString(SettingKeys.Language, "bilingual") ?? "bilingual";
+            if (key != SettingKeys.Language) return;
+            void Apply() => Language = settings.GetString(SettingKeys.Language, "bilingual") ?? "bilingual";
+            if (_dispatcher is null || _dispatcher.HasThreadAccess) Apply();
+            else _dispatcher.TryEnqueue(Apply);
         };
     }
+
+    /// <summary>Re-reads the language setting on the UI thread (after a backup import).</summary>
+    public void Reload() => Language = _settings.GetString(SettingKeys.Language, "bilingual") ?? "bilingual";
 
     [ObservableProperty] private string _language = "bilingual";
 
@@ -125,6 +134,7 @@ public sealed partial class UiStrings : ObservableObject
     public string ResetLayout => T("بازنشانی چیدمان", "Reset layout");
     public string ExportBackup => T("خروجی پشتیبان …", "Export backup …");
     public string ImportBackup => T("بازیابی پشتیبان …", "Import backup …");
+    public string ImportConfirm => T("همه اطلاعات فعلی تخته با محتوای این فایل جایگزین می‌شود. ادامه می‌دهید؟", "Everything on the board will be replaced by this file. Continue?");
     public string Close => T("بستن", "Close");
     public string ExitApp => T("خروج از Desktop Board", "Exit Desktop Board");
     public string RestartHint => T("تغییر حالت دسکتاپ بعد از اجرای مجدد اعمال می‌شود.", "Desktop mode changes apply after restart.");

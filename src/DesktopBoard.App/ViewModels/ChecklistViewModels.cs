@@ -25,7 +25,8 @@ public abstract partial class ChecklistItemViewModel : ObservableObject, IDispos
 
     public ChecklistViewModel Owner { get; }
     public long Id { get; protected set; }
-    public int SortOrder { get; set; }
+    /// <summary>Backed by the entity so a reorder and a later full-row save never disagree.</summary>
+    public abstract int SortOrder { get; set; }
     public IRelayCommand DeleteCommand { get; }
 
     [ObservableProperty] private string _title = string.Empty;
@@ -130,6 +131,14 @@ public abstract partial class ChecklistViewModel : ObservableObject
         });
     }
 
+    /// <summary>Flushes and disposes the current rows before a reload, so no debouncer leaks or writes late.</summary>
+    protected async Task ClearItemsAsync()
+    {
+        foreach (var i in Items) await i.FlushAsync();
+        foreach (var i in Items) i.Dispose();
+        Items.Clear();
+    }
+
     public void RefreshCounters()
     {
         TotalCount = Items.Count;
@@ -156,7 +165,6 @@ public sealed partial class TaskItemViewModel : ChecklistItemViewModel
         _repo = repo;
         Entity = entity;
         Id = entity.Id;
-        SortOrder = entity.SortOrder;
         Title = entity.Title;
         IsCompleted = entity.IsCompleted;
         TimeText = TextUtil.FormatTime(entity.Time);
@@ -166,6 +174,7 @@ public sealed partial class TaskItemViewModel : ChecklistItemViewModel
     }
 
     public TaskItem Entity { get; }
+    public override int SortOrder { get => Entity.SortOrder; set => Entity.SortOrder = value; }
 
     protected override void ApplyToEntity()
     {
@@ -207,7 +216,7 @@ public sealed partial class TaskListViewModel : ChecklistViewModel
     public override async Task LoadAsync()
     {
         var rows = await _repo.GetBySectionAsync(Section, Category);
-        Items.Clear();
+        await ClearItemsAsync();
         foreach (var t in rows) Items.Add(new TaskItemViewModel(this, t, _repo));
         for (var n = 0; n < Items.Count; n++) Items[n].Number = n + 1;
         RefreshCounters();
@@ -251,13 +260,13 @@ public sealed partial class GoalItemViewModel : ChecklistItemViewModel
         _repo = repo;
         Entity = entity;
         Id = entity.Id;
-        SortOrder = entity.SortOrder;
         Title = entity.Title;
         IsCompleted = entity.IsCompleted;
         EndInit();
     }
 
     public Goal Entity { get; }
+    public override int SortOrder { get => Entity.SortOrder; set => Entity.SortOrder = value; }
 
     protected override void ApplyToEntity()
     {
@@ -283,7 +292,7 @@ public sealed partial class GoalListViewModel : ChecklistViewModel
     public override async Task LoadAsync()
     {
         var rows = await _repo.GetBySectionAsync(Section);
-        Items.Clear();
+        await ClearItemsAsync();
         foreach (var g in rows) Items.Add(new GoalItemViewModel(this, g, _repo));
         for (var n = 0; n < Items.Count; n++) Items[n].Number = n + 1;
         RefreshCounters();

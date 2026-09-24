@@ -11,7 +11,8 @@ public static class ServiceCollectionExtensions
     /// <summary>Registers the SQLite database, all repositories and the data-backed services.</summary>
     public static IServiceCollection AddDesktopBoardData(this IServiceCollection services, string databasePath)
     {
-        services.AddSingleton(new SqliteDatabase(databasePath));
+        // Factory registration: the container owns the instance and disposes it with the provider.
+        services.AddSingleton(_ => new SqliteDatabase(databasePath));
         services.AddSingleton<ITaskRepository, TaskRepository>();
         services.AddSingleton<IGoalRepository, GoalRepository>();
         services.AddSingleton<IProjectRepository, ProjectRepository>();

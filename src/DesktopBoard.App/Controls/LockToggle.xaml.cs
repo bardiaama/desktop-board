@@ -55,6 +55,12 @@ public sealed partial class LockToggle : UserControl
 
     private void Root_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        // Only a primary (left / touch / pen tip) press counts; a right-click reaching for the
+        // desktop context menu must never toggle the lock.
+        var props = e.GetCurrentPoint(Root).Properties;
+        if (e.Pointer.PointerDeviceType != Microsoft.UI.Input.PointerDeviceType.Touch && !props.IsLeftButtonPressed)
+            return;
+
         Focus(FocusState.Pointer);
         Root.CapturePointer(e.Pointer);
         _pressed = true;
@@ -124,10 +130,12 @@ public sealed partial class LockToggle : UserControl
 
     private void LockToggle_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key is global::Windows.System.VirtualKey.Enter or global::Windows.System.VirtualKey.Space)
-        {
-            Toggle();
-            e.Handled = true;
-        }
+        if (e.Key is not (global::Windows.System.VirtualKey.Enter or global::Windows.System.VirtualKey.Space)) return;
+        e.Handled = true;
+        // Locking is always one key press. Unlocking by keyboard is allowed only when the
+        // deliberate press-and-hold is switched off; otherwise a stray Enter on the focused
+        // pill would defeat the whole point of the hold.
+        if (IsLocked && HoldToUnlock) return;
+        Toggle();
     }
 }

@@ -67,6 +67,11 @@ public interface IDesktopHostService
     /// <summary>Full bounds (in physical pixels) of the monitor the board should cover.</summary>
     (int X, int Y, int Width, int Height) GetTargetBounds();
     DesktopHostMode CurrentMode { get; }
+    /// <summary>
+    /// Re-fits the window if the monitor geometry changed or the shell replaced its host
+    /// window. Cheap when nothing changed; safe to call from a timer on the UI thread.
+    /// </summary>
+    bool RefreshIfChanged();
 }
 
 /// <summary>"Start Desktop Board with Windows" via the per-user Run key.</summary>

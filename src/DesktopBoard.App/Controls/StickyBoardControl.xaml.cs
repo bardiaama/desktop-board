@@ -36,6 +36,7 @@ public sealed partial class StickyBoardControl : UserControl
         if (ViewModel is null || Root.ActualWidth <= 0) return;
         ViewModel.CanvasWidth = Root.ActualWidth;
         ViewModel.CanvasHeight = Root.ActualHeight;
+        ViewModel.ClampToCanvas();
     }
 
     private static StickyNoteViewModel? VmOf(object sender) =>

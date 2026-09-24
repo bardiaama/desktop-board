@@ -13,6 +13,7 @@
         <Setter Property="Padding" Value="6,4,6,4" />
         <Setter Property="MinHeight" Value="0" />
         <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="IsSpellCheckEnabled" Value="False" />
         <Setter Property="TextWrapping" Value="NoWrap" />
         <Setter Property="SelectionHighlightColor" Value="#5560A5FA" />
@@ -59,7 +60,7 @@
                                    Padding="{TemplateBinding Padding}"
                                    TextWrapping="{TemplateBinding TextWrapping}"
                                    TextAlignment="{TemplateBinding TextAlignment}"
-                                   VerticalAlignment="Center"
+                                   VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                    IsHitTestVisible="False" />
                     </Grid>
                 </ControlTemplate>
@@ -72,6 +73,7 @@
         <Setter Property="AcceptsReturn" Value="True" />
         <Setter Property="TextWrapping" Value="Wrap" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Top" />
         <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
         <Setter Property="Padding" Value="6" />
     </Style>

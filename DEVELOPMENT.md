@@ -6,7 +6,7 @@ whiteboard (Work / کاری on the left, Personal / شخصی on the right). It i
 
 ## Solution layout
 
-```
+```text
 DesktopBoard.sln
 Directory.Build.props              nullable + implicit usings for every project
 src/
@@ -80,10 +80,15 @@ Data lives in `%LOCALAPPDATA%\DesktopBoard\` (`board.db`, `desktopboard.log`).
   are immediate. `MainViewModel.FlushAsync()` writes pending debounced edits on exit
   (the window cancels its first close, flushes, then closes).
 - **Lock / edit**: `IBoardStateService` is the single source of truth. In LOCKED mode the
-  whole body grid has `IsHitTestVisible=false`, so no click can reach any control; the
-  header's lock pill is the only interactive element. Unlocking is a press-and-hold
-  (650 ms, configurable off); locking is a click. `Ctrl+Shift+L` toggles, `Ctrl+Esc`
-  locks. Default state on launch is LOCKED (setting `board.defaultLocked`).
+  whole body grid has `IsHitTestVisible=false` (no pointer input) and cancels
+  `GettingFocus` (no keyboard focus), so neither a click nor Tab/Enter can reach any
+  control; the header's lock pill is the only interactive element. Unlocking is a
+  press-and-hold (650 ms, configurable off; when hold is on, Enter/Space on the pill do
+  not unlock and only a primary-button press counts); locking is a click. `Ctrl+Shift+L`
+  toggles, `Ctrl+Shift+K` locks. Default state on launch is LOCKED (setting
+  `board.defaultLocked`), applied once at startup and never on a reload. Settings actions
+  that rewrite data (reset layout, import) are disabled while locked, and import asks for
+  confirmation.
 - **Data model**: `Tasks` (Section × Category: Today / ThisWeek / Future), `Goals`,
   `Projects`, `Meetings`, `Notes` (one per section), `StickyNotes` (position, size,
   rotation, color), `AppSettings` (key/value), `SchemaVersion`. Dates are ISO strings,
@@ -129,10 +134,16 @@ above both, and the board must survive "Show desktop".
 
 The mode is a setting (`desktop.hostMode`, default `auto`); changing it needs a restart.
 
-After attaching, the window is subclassed (`GWLP_WNDPROC`) and `WM_DISPLAYCHANGE` /
-`WM_DPICHANGED` re-fit the board to the primary monitor and re-parent it if explorer
-recreated its WorkerW. `AppWindow` becomes unusable after re-parenting, so the window
-is configured (borderless presenter, size, switcher visibility) *before* `Attach`.
+After attaching, the window is subclassed (`GWLP_WNDPROC`) for Z-order pinning and to
+swallow minimize. Display changes (dock/undock, resolution, DPI) are detected by
+`IDesktopHostService.RefreshIfChanged()`, which `MainWindow` calls from a 3-second UI
+timer: a `WS_CHILD` window never receives `WM_DISPLAYCHANGE`, so the service compares the
+primary monitor rectangle and the host WorkerW with what it last applied and only then
+re-fits (and re-parents if explorer recreated its WorkerW). In the top-level fallback
+modes the same refit also runs on `WM_DISPLAYCHANGE` / `WM_DPICHANGED`. `AppWindow`
+becomes unusable after re-parenting, so the window is configured (borderless presenter,
+size, switcher visibility) *before* `Attach`. On Windows 11 24H2 the per-monitor
+WorkerW whose rectangle contains the primary monitor is chosen.
 
 WinUI-specific gotchas met on the way (all fixed in code, kept here to save the next
 person a day):

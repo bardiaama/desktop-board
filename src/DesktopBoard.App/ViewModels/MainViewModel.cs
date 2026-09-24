@@ -107,9 +107,16 @@ public sealed partial class MainViewModel : ObservableObject
 
     partial void OnIsLockedChanged(bool value) => OnPropertyChanged(nameof(IsEditMode));
 
+    private bool _initialLockApplied;
+
     public async Task LoadAsync()
     {
-        if (_settings.GetBool(SettingKeys.DefaultLocked, true)) _state.Lock(); else _state.Unlock();
+        // The default lock state is applied once at startup, never on a reload (backup import).
+        if (!_initialLockApplied)
+        {
+            _initialLockApplied = true;
+            if (_settings.GetBool(SettingKeys.DefaultLocked, true)) _state.Lock(); else _state.Unlock();
+        }
 
         await Task.WhenAll(
             WorkGoals.LoadAsync(), PersonalGoals.LoadAsync(),
@@ -168,6 +175,7 @@ public sealed partial class MainViewModel : ObservableObject
             Projects.FlushAsync(), Meetings.FlushAsync(),
             WorkNote.FlushAsync(), PersonalNote.FlushAsync(),
             WorkIdeas.FlushAsync(), PersonalIdeas.FlushAsync());
+        await Helpers.Persist.WaitAllAsync(TimeSpan.FromSeconds(5));
     }
 
     public async Task ResetLayoutAsync()
@@ -183,6 +191,9 @@ public sealed partial class MainViewModel : ObservableObject
     public async Task ReloadAllAsync()
     {
         await _settings.LoadAsync();
+        ApplySettings();
+        Strings.Reload();
         await LoadAsync();
+        await ReloadWallpaperAsync();
     }
 }

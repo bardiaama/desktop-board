@@ -39,7 +39,23 @@ public sealed partial class SettingsDialog : ContentDialog
     private async void Import_Click(object sender, RoutedEventArgs e)
     {
         var path = FileDialogs.Open(OwnerHwnd, ViewModel.Strings.ImportBackup, "Desktop Board backup|*.json|All files|*.*");
-        if (path is not null) await ViewModel.ImportAsync(path);
+        if (path is null) return;
+
+        // Import replaces everything on the board: ask once.
+        var confirm = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = ViewModel.Strings.ImportBackup,
+            Content = ViewModel.Strings.ImportConfirm + Environment.NewLine + Path.GetFileName(path),
+            PrimaryButtonText = ViewModel.Strings.Yes,
+            CloseButtonText = ViewModel.Strings.NotNow,
+            DefaultButton = ContentDialogButton.Close,
+            FlowDirection = Flow
+        };
+        Hide();
+        var result = await confirm.ShowAsync();
+        if (result == ContentDialogResult.Primary) await ViewModel.ImportAsync(path);
+        await ShowAsync();
     }
 
     private async void Exit_Click(object sender, RoutedEventArgs e)

@@ -11,7 +11,7 @@
 
     <UserControl.KeyboardAccelerators>
         <KeyboardAccelerator Modifiers="Control,Shift" Key="L" Invoked="ToggleLock_Invoked" />
-        <KeyboardAccelerator Modifiers="Control" Key="Escape" Invoked="Lock_Invoked" />
+        <KeyboardAccelerator Modifiers="Control,Shift" Key="K" Invoked="Lock_Invoked" />
     </UserControl.KeyboardAccelerators>
 
     <UserControl.Resources>
@@ -35,10 +35,11 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <Grid>
-                        <TextBlock Text="{x:Bind Name, Mode=OneWay}" Style="{StaticResource BodyText}" FontSize="15.5" Padding="6,3,6,3"
+                    <!-- RTL base direction for correct bidi of names like "پروژه GSM"; TextAlignment is logical, so Right = physical left -->
+                    <Grid FlowDirection="RightToLeft">
+                        <TextBlock Text="{x:Bind Name, Mode=OneWay}" Style="{StaticResource BodyText}" FontSize="15.5" Padding="6,3,6,3" TextAlignment="Right"
                                    Visibility="{x:Bind fx:Fx.VisNot(Owner.IsEditMode), Mode=OneWay}" />
-                        <TextBox Text="{x:Bind Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GhostTextBox}" FontSize="15.5" Padding="6,3,6,3"
+                        <TextBox Text="{x:Bind Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GhostTextBox}" FontSize="15.5" Padding="6,3,6,3" TextAlignment="Right"
                                  Visibility="{x:Bind fx:Fx.Vis(Owner.IsEditMode), Mode=OneWay}" />
                     </Grid>
                     <!-- progress line -->
@@ -189,7 +190,8 @@
             </Grid>
 
             <!-- BODY -->
-            <Grid Grid.Row="1" IsHitTestVisible="{x:Bind ViewModel.IsEditMode, Mode=OneWay}">
+            <!-- LOCKED: no pointer input (IsHitTestVisible) and no keyboard focus (GettingFocus is cancelled). -->
+            <Grid Grid.Row="1" x:Name="Body" IsHitTestVisible="{x:Bind ViewModel.IsEditMode, Mode=OneWay}" GettingFocus="Body_GettingFocus">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />

@@ -9,6 +9,7 @@ public sealed class Debouncer : IDisposable
     private readonly object _gate = new();
     private CancellationTokenSource? _cts;
     private Func<Task>? _pending;
+    private Task? _running;
 
     public Debouncer(TimeSpan delay) => Delay = delay;
 
@@ -34,10 +35,14 @@ public sealed class Debouncer : IDisposable
         _ = RunLater(cts.Token);
     }
 
-    /// <summary>Runs the pending action immediately (if any). Used on shutdown so nothing is lost.</summary>
+    /// <summary>
+    /// Runs the pending action immediately (if any) and waits for an action that is already
+    /// executing, so callers (e.g. app shutdown) know every write has completed.
+    /// </summary>
     public async Task FlushAsync()
     {
         Func<Task>? action;
+        Task? running;
         lock (_gate)
         {
             _cts?.Cancel();
@@ -45,8 +50,13 @@ public sealed class Debouncer : IDisposable
             _cts = null;
             action = _pending;
             _pending = null;
+            running = _running;
         }
 
+        if (running is not null)
+        {
+            try { await running.ConfigureAwait(false); } catch { /* already reported via Failed */ }
+        }
         if (action is not null) await action().ConfigureAwait(false);
     }
 
@@ -61,19 +71,33 @@ public sealed class Debouncer : IDisposable
             return;
         }
 
-        Func<Task>? action;
+        Task? work = null;
         lock (_gate)
         {
             if (token.IsCancellationRequested) return;
-            action = _pending;
+            var action = _pending;
             _pending = null;
+            if (action is not null)
+            {
+                work = Execute(action);
+                _running = work;
+            }
         }
 
-        if (action is not null)
+        if (work is not null)
         {
-            try { await action().ConfigureAwait(false); }
-            catch (Exception ex) { Failed?.Invoke(this, ex); }
+            await work.ConfigureAwait(false);
+            lock (_gate)
+            {
+                if (ReferenceEquals(_running, work)) _running = null;
+            }
         }
+    }
+
+    private async Task Execute(Func<Task> action)
+    {
+        try { await action().ConfigureAwait(false); }
+        catch (Exception ex) { Failed?.Invoke(this, ex); }
     }
 
     public event EventHandler<Exception>? Failed;

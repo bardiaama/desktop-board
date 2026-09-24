@@ -11,22 +11,30 @@ namespace DesktopBoard.Windows.DesktopIntegration;
 /// <see cref="IDesktopHostService"/>.
 ///
 /// After attaching, the window is subclassed so that:
-///   * display changes (dock/undock, resolution or DPI change) re-fit the board to the
-///     primary monitor and re-attach it if the shell recreated its WorkerW;
 ///   * in BottomMost mode the window is pinned to the bottom of the Z-order;
-///   * minimize requests (e.g. "Show desktop" in fallback mode) are ignored.
+///   * minimize requests (e.g. "Show desktop" in fallback mode) are ignored;
+///   * display / DPI messages re-fit the board where they are delivered (top-level modes).
+///
+/// WM_DISPLAYCHANGE / WM_DPICHANGED are never delivered to a WS_CHILD window, so in the
+/// Embedded mode the window itself cannot notice a dock/undock or resolution change.
+/// The app therefore also calls <see cref="RefreshIfChanged"/> from a slow UI timer; it
+/// compares the current monitor geometry and host window with what was last applied and
+/// only touches the window when something differs.
 /// </summary>
 public sealed class DesktopHostService : IDesktopHostService
 {
     private const uint WM_DISPLAYCHANGE = 0x007E;
     private const uint WM_DPICHANGED = 0x02E0;
-    private const uint WM_SETTINGCHANGE = 0x001A;
+    private const uint WM_DPICHANGED_AFTERPARENT = 0x02E3;
 
     private WndProc? _subclassProc;   // kept alive for the lifetime of the subclass
     private nint _originalWndProc;
     private nint _subclassedHwnd;
     private nint _hwnd;
     private bool _refreshing;
+    private (int X, int Y, int Width, int Height) _applied;
+    private nint _appliedParent;
+    private (int X, int Y, int Width, int Height)? _fixedBounds;
 
     public DesktopHostMode CurrentMode { get; private set; } = DesktopHostMode.Normal;
 
@@ -72,7 +80,10 @@ public sealed class DesktopHostService : IDesktopHostService
             }
         }
 
+        // Normal mode: the window keeps whatever size the app gave it (e.g. --size= previews).
         CurrentMode = DesktopHostMode.Normal;
+        if (GetWindowRect(hwnd, out var r))
+            _fixedBounds = (r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
         InstallSubclass(hwnd);
         return new DesktopHostResult(CurrentMode, detail + "Running as a normal borderless window.");
     }
@@ -104,11 +115,23 @@ public sealed class DesktopHostService : IDesktopHostService
         return (0, 0, GetSystemMetrics(0), GetSystemMetrics(1));
     }
 
+    public bool RefreshIfChanged()
+    {
+        if (_hwnd == nint.Zero || !IsWindow(_hwnd) || CurrentMode == DesktopHostMode.Normal) return false;
+        var target = GetTargetBounds();
+        var parent = GetParent(_hwnd);
+        var parentOk = CurrentMode != DesktopHostMode.Embedded || (parent != nint.Zero && IsWindow(parent) && parent == _appliedParent);
+        if (target == _applied && parentOk) return false;
+        Refresh();
+        return true;
+    }
+
     // ---------------------------------------------------------------------------------
 
     private (bool Ok, string Detail) TryEmbed(nint hwnd)
     {
-        var located = WorkerWLocator.Locate();
+        var target = GetTargetBounds();
+        var located = WorkerWLocator.Locate(target);
         if (located is null) return (false, "Progman / WorkerW not found");
 
         var style = GetWindowLongPtr(hwnd, GWL_STYLE).ToInt64();
@@ -150,9 +173,10 @@ public sealed class DesktopHostService : IDesktopHostService
     /// </summary>
     private void FitEmbedded(nint hwnd)
     {
-        var (x, y, w, h) = GetTargetBounds();
+        var target = GetTargetBounds();
+        var (x, y, w, h) = target;
         var parent = GetParent(hwnd);
-        int ox = 0, oy = 0;
+        int ox, oy;
         if (parent != nint.Zero && GetWindowRect(parent, out var pr))
         {
             ox = pr.Left;
@@ -164,11 +188,14 @@ public sealed class DesktopHostService : IDesktopHostService
             oy = GetSystemMetrics(SM_YVIRTUALSCREEN);
         }
         SetWindowPos(hwnd, HWND_BOTTOM, x - ox, y - oy, w, h, SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+        _applied = target;
+        _appliedParent = parent;
     }
 
     private void ApplyBottomMost(nint hwnd)
     {
-        var (x, y, w, h) = GetTargetBounds();
+        var target = GetTargetBounds();
+        var (x, y, w, h) = target;
 
         var ex = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
         ex &= ~WS_EX_APPWINDOW;
@@ -176,6 +203,8 @@ public sealed class DesktopHostService : IDesktopHostService
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, (nint)ex);
 
         SetWindowPos(hwnd, HWND_BOTTOM, x, y, w, h, SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+        _applied = target;
+        _appliedParent = nint.Zero;
     }
 
     /// <summary>
@@ -193,7 +222,7 @@ public sealed class DesktopHostService : IDesktopHostService
                 case DesktopHostMode.Embedded:
                 {
                     var parent = GetParent(_hwnd);
-                    var located = WorkerWLocator.Locate();
+                    var located = WorkerWLocator.Locate(GetTargetBounds());
                     if (located is not null && located.WorkerW != parent && IsWindow(located.WorkerW))
                     {
                         SetParent(_hwnd, located.WorkerW);
@@ -204,19 +233,19 @@ public sealed class DesktopHostService : IDesktopHostService
                 }
                 case DesktopHostMode.BottomMost:
                 {
-                    var (x, y, w, h) = GetTargetBounds();
+                    var target = GetTargetBounds();
+                    var (x, y, w, h) = target;
                     SetWindowPos(_hwnd, HWND_BOTTOM, x, y, w, h, SWP_NOACTIVATE | SWP_FRAMECHANGED);
+                    _applied = target;
                     break;
                 }
                 default:
-                {
-                    var (x, y, w, h) = GetTargetBounds();
-                    SetWindowPos(_hwnd, nint.Zero, x, y, w, h, SWP_NOACTIVATE | SWP_NOZORDER | SWP_FRAMECHANGED);
-                    break;
-                }
+                    // Normal mode keeps the size the app chose (e.g. a --size= preview).
+                    if (_fixedBounds is { } fb)
+                        SetWindowPos(_hwnd, nint.Zero, fb.X, fb.Y, fb.Width, fb.Height, SWP_NOACTIVATE | SWP_NOZORDER | SWP_FRAMECHANGED);
+                    return;
             }
-            var (_, _, fw, fh) = GetTargetBounds();
-            Logger.Info($"Desktop host: refit to {fw}x{fh} ({CurrentMode}).");
+            Logger.Info($"Desktop host: refit to {_applied.Width}x{_applied.Height} at ({_applied.X},{_applied.Y}) ({CurrentMode}).");
         }
         catch (Exception ex)
         {
@@ -263,9 +292,10 @@ public sealed class DesktopHostService : IDesktopHostService
                 return nint.Zero;
             case WM_DISPLAYCHANGE:
             case WM_DPICHANGED:
+            case WM_DPICHANGED_AFTERPARENT:
             {
                 var result = CallWindowProc(_originalWndProc, hWnd, msg, wParam, lParam);
-                Refresh();
+                if (CurrentMode != DesktopHostMode.Normal) Refresh();
                 return result;
             }
         }

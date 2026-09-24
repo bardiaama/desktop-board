@@ -189,8 +189,81 @@ public class BackupTests : IDisposable
     }
 }
 
+public class BackupSafetyTests : IDisposable
+{
+    private readonly DataFixture _f = new();
+    public void Dispose() => _f.Dispose();
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("[]")]
+    [InlineData("{\"name\":\"not a backup\"}")]
+    [InlineData("not json at all")]
+    public async Task Import_rejects_files_that_are_not_backups_and_keeps_data(string content)
+    {
+        await _f.Get<IDatabaseInitializer>().InitializeAsync();
+        var tasks = _f.Get<ITaskRepository>();
+        var before = (await tasks.GetAllAsync()).Count;
+        Assert.True(before > 0);
+
+        var file = Path.Combine(_f.Folder, "bad.json");
+        await File.WriteAllTextAsync(file, content);
+        await Assert.ThrowsAsync<InvalidDataException>(() => _f.Get<IBackupService>().ImportAsync(file));
+
+        Assert.Equal(before, (await tasks.GetAllAsync()).Count);
+    }
+
+    [Fact]
+    public async Task Restore_is_atomic_when_a_row_fails()
+    {
+        await _f.Get<IDatabaseInitializer>().InitializeAsync();
+        var tasks = _f.Get<ITaskRepository>();
+        var goals = _f.Get<IGoalRepository>();
+        var before = await tasks.GetAllAsync();
+        var goalsBefore = await goals.GetAllAsync();
+
+        // Tasks are restored before goals; a null goal title violates NOT NULL and must roll everything back.
+        var snapshot = new BoardSnapshot();
+        snapshot.Tasks.Add(new TaskItem { Title = "replacement", Section = Section.Work });
+        snapshot.Goals.Add(new Goal { Title = null!, Section = Section.Work });
+
+        await Assert.ThrowsAnyAsync<Exception>(() => _f.Get<IBackupService>().RestoreAsync(snapshot));
+
+        Assert.Equal(before.Select(t => t.Title), (await tasks.GetAllAsync()).Select(t => t.Title));
+        Assert.Equal(goalsBefore.Count, (await goals.GetAllAsync()).Count);
+    }
+
+    [Fact]
+    public void Parse_accepts_a_real_backup_and_fills_null_strings()
+    {
+        var json = "{\"FormatVersion\":1,\"Tasks\":[{\"Id\":5,\"Section\":\"Work\",\"Category\":\"Today\"}],\"Projects\":[{\"Name\":null}]}";
+        var snapshot = BackupService.Parse(json);
+        Assert.Single(snapshot.Tasks);
+        Assert.Equal(string.Empty, snapshot.Tasks[0].Title);
+        Assert.Equal("#3B82F6", snapshot.Projects[0].Color);
+    }
+}
+
 public class CoreServiceTests
 {
+    [Fact]
+    public async Task Debouncer_flush_waits_for_an_action_that_is_already_running()
+    {
+        using var d = new Debouncer(TimeSpan.FromMilliseconds(20));
+        var started = new TaskCompletionSource();
+        var release = new TaskCompletionSource();
+        var finished = false;
+        d.Debounce(async () => { started.SetResult(); await release.Task; finished = true; });
+        await started.Task;                 // the action is now in flight and _pending is empty
+
+        var flush = d.FlushAsync();
+        await Task.Delay(50);
+        Assert.False(flush.IsCompleted);    // flush must wait for the running write
+        release.SetResult();
+        await flush;
+        Assert.True(finished);
+    }
+
     [Fact]
     public async Task Debouncer_runs_only_last_action_after_delay()
     {

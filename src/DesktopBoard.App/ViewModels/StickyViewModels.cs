@@ -114,6 +114,8 @@ public sealed partial class StickyBoardViewModel : ObservableObject
     public async Task LoadAsync()
     {
         var rows = await _repo.GetBySectionAsync(Section);
+        foreach (var i in Items) await i.FlushAsync();
+        foreach (var i in Items) i.Dispose();
         Items.Clear();
         foreach (var s in rows) Items.Add(new StickyNoteViewModel(this, s, _repo));
     }
@@ -154,6 +156,20 @@ public sealed partial class StickyBoardViewModel : ObservableObject
             it.Entity.PositionX = it.X;
             it.Entity.PositionY = it.Y;
             await _repo.UpdateAsync(it.Entity);
+        }
+    }
+
+    /// <summary>Keeps every note inside the canvas after the card was resized (smaller window / scale).</summary>
+    public void ClampToCanvas()
+    {
+        foreach (var it in Items)
+        {
+            var nx = Math.Clamp(it.X, 0, Math.Max(0, CanvasWidth - it.Width));
+            var ny = Math.Clamp(it.Y, 0, Math.Max(0, CanvasHeight - it.Height));
+            if (Math.Abs(nx - it.X) < 0.5 && Math.Abs(ny - it.Y) < 0.5) continue;
+            it.X = nx;
+            it.Y = ny;
+            it.CommitPosition();
         }
     }
 

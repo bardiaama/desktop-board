@@ -100,6 +100,8 @@ public sealed partial class MeetingListViewModel : ObservableObject
     public async Task LoadAsync()
     {
         var rows = await _repo.GetUpcomingAsync(DateOnly.FromDateTime(DateTime.Now), 8);
+        foreach (var i in Items) await i.FlushAsync();
+        foreach (var i in Items) i.Dispose();
         Items.Clear();
         foreach (var m in rows) Items.Add(new MeetingItemViewModel(this, m, _repo));
     }

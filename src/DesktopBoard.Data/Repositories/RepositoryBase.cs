@@ -6,10 +6,20 @@ using Microsoft.Data.Sqlite;
 namespace DesktopBoard.Data.Repositories;
 
 /// <summary>
+/// Synchronous writes that run inside a caller-owned transaction. Used by the backup
+/// restore so "delete everything, insert everything" is atomic.
+/// </summary>
+public interface IBulkWritable<in T> where T : Entity
+{
+    void DeleteAll(SqliteConnection connection, SqliteTransaction transaction);
+    void Insert(SqliteConnection connection, SqliteTransaction transaction, T entity);
+}
+
+/// <summary>
 /// Shared plumbing for the per-entity repositories. Subclasses provide the table name,
 /// the column list, a reader and a parameter binder; everything else is generic.
 /// </summary>
-public abstract class RepositoryBase<T> : IRepository<T> where T : Entity
+public abstract class RepositoryBase<T> : IRepository<T>, IBulkWritable<T> where T : Entity
 {
     protected RepositoryBase(SqliteDatabase db) => Db = db;
 
@@ -38,9 +48,17 @@ public abstract class RepositoryBase<T> : IRepository<T> where T : Entity
 
     public Task<T> AddAsync(T entity) => Db.RunAsync(c =>
     {
+        Insert(c, null, entity);
+        return entity;
+    });
+
+    /// <summary>Inserts inside the caller's transaction (or none). Sets <c>entity.Id</c>.</summary>
+    public void Insert(SqliteConnection c, SqliteTransaction? tx, T entity)
+    {
         entity.CreatedAt = entity.CreatedAt == default ? DateTime.UtcNow : entity.CreatedAt;
         entity.UpdatedAt = DateTime.UtcNow;
         using var cmd = c.CreateCommand();
+        cmd.Transaction = tx;
         var cols = string.Join(", ", Columns);
         var pars = string.Join(", ", Columns.Select((_, i) => "$c" + i));
         cmd.CommandText = $"INSERT INTO {Table} (CreatedAt, UpdatedAt, {cols}) VALUES ($created, $updated, {pars}); SELECT last_insert_rowid();";
@@ -48,8 +66,17 @@ public abstract class RepositoryBase<T> : IRepository<T> where T : Entity
         cmd.Parameters.AddWithValue("$updated", SqliteDatabase.ToDb(entity.UpdatedAt));
         Bind(cmd, entity);
         entity.Id = (long)cmd.ExecuteScalar()!;
-        return entity;
-    });
+    }
+
+    void IBulkWritable<T>.Insert(SqliteConnection connection, SqliteTransaction transaction, T entity) => Insert(connection, transaction, entity);
+
+    public void DeleteAll(SqliteConnection c, SqliteTransaction transaction)
+    {
+        using var cmd = c.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandText = $"DELETE FROM {Table}";
+        cmd.ExecuteNonQuery();
+    }
 
     public Task UpdateAsync(T entity) => Db.RunAsync(c =>
     {

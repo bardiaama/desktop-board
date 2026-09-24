@@ -16,14 +16,16 @@ namespace DesktopBoard.Windows.DesktopIntegration;
 ///   * Classic (Windows 7 - 11 23H2): WorkerW windows are top-level siblings of
 ///     Progman. The icon DefView lives in one WorkerW; the *next* WorkerW is the
 ///     wallpaper layer we want.
-///   * Windows 11 24H2+: DefView stays inside Progman and the spawned WorkerW is
-///     a child of Progman, placed behind DefView.
+///   * Windows 11 24H2+: DefView stays inside Progman and one WorkerW **per monitor**
+///     is a child of Progman, placed behind DefView. We pick the one that covers the
+///     target rectangle (the primary monitor).
 /// </summary>
 public static class WorkerWLocator
 {
     public sealed record Result(nint Progman, nint WorkerW, nint DefView, string Layout);
 
-    public static Result? Locate()
+    /// <param name="target">Rectangle (screen pixels) the host must cover; used to pick the right per-monitor WorkerW.</param>
+    public static Result? Locate((int X, int Y, int Width, int Height)? target = null)
     {
         var progman = FindWindow("Progman", null);
         if (progman == nint.Zero) return null;
@@ -50,13 +52,30 @@ public static class WorkerWLocator
         if (workerW != nint.Zero && IsWindow(workerW))
             return new Result(progman, workerW, defView, "classic");
 
-        // Layout 2 (24H2+): DefView and WorkerW are both children of Progman.
+        // Layout 2 (24H2+): DefView and per-monitor WorkerW children of Progman.
         defView = FindWindowEx(progman, nint.Zero, "SHELLDLL_DefView", null);
         if (defView != nint.Zero)
         {
+            nint first = nint.Zero, best = nint.Zero;
             var child = FindWindowEx(progman, nint.Zero, "WorkerW", null);
-            if (child != nint.Zero && IsWindow(child))
-                return new Result(progman, child, defView, "progman-child");
+            while (child != nint.Zero)
+            {
+                if (IsWindow(child))
+                {
+                    if (first == nint.Zero) first = child;
+                    if (target is { } t && GetWindowRect(child, out var r) &&
+                        Contains(r, t.X + t.Width / 2, t.Y + t.Height / 2))
+                    {
+                        best = child;
+                        break;
+                    }
+                }
+                child = FindWindowEx(progman, child, "WorkerW", null);
+            }
+
+            var chosen = best != nint.Zero ? best : first;
+            if (chosen != nint.Zero)
+                return new Result(progman, chosen, defView, best != nint.Zero ? "progman-child" : "progman-child-first");
 
             // No WorkerW spawned: use Progman itself and rely on Z-ordering below DefView.
             return new Result(progman, progman, defView, "progman-direct");
@@ -64,4 +83,6 @@ public static class WorkerWLocator
 
         return null;
     }
+
+    private static bool Contains(RECT r, int x, int y) => x >= r.Left && x < r.Right && y >= r.Top && y < r.Bottom;
 }

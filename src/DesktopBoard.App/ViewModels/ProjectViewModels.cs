@@ -37,8 +37,11 @@ public sealed partial class ProjectItemViewModel : ObservableObject, IDisposable
         CycleColorCommand = new RelayCommand(CycleColor);
         CycleStatusCommand = new RelayCommand(CycleStatus);
         _debouncer.Failed += (_, ex) => Logger.Error("Project save failed", ex);
-        strings.PropertyChanged += (_, _) => OnPropertyChanged(nameof(StatusText));
+        _stringsHandler = (_, _) => OnPropertyChanged(nameof(StatusText));
+        strings.PropertyChanged += _stringsHandler;
     }
+
+    private readonly System.ComponentModel.PropertyChangedEventHandler _stringsHandler;
 
     public ProjectListViewModel Owner { get; }
     public Project Entity { get; }
@@ -103,7 +106,12 @@ public sealed partial class ProjectItemViewModel : ObservableObject, IDisposable
     private void CycleStatus() => Status = (ProjectStatus)(((int)Status + 1) % 3);
 
     public Task FlushAsync() => _debouncer.FlushAsync();
-    public void Dispose() => _debouncer.Dispose();
+
+    public void Dispose()
+    {
+        _strings.PropertyChanged -= _stringsHandler;
+        _debouncer.Dispose();
+    }
 }
 
 public sealed partial class ProjectListViewModel : ObservableObject
@@ -130,6 +138,8 @@ public sealed partial class ProjectListViewModel : ObservableObject
     public async Task LoadAsync()
     {
         var rows = await _repo.GetAllAsync();
+        foreach (var i in Items) await i.FlushAsync();
+        foreach (var i in Items) i.Dispose();
         Items.Clear();
         foreach (var p in rows) Items.Add(new ProjectItemViewModel(this, p, _repo, _strings));
     }

@@ -3,19 +3,42 @@ using Microsoft.UI.Dispatching;
 
 namespace DesktopBoard.App.Helpers;
 
-/// <summary>Fire-and-forget persistence with logging, so a failed write never crashes the UI.</summary>
+/// <summary>
+/// Fire-and-forget persistence with logging, so a failed write never crashes the UI.
+/// In-flight writes are tracked so shutdown can wait for them (<see cref="WaitAllAsync"/>).
+/// </summary>
 public static class Persist
 {
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Task, byte> InFlight = new();
+
     public static void Run(Task task, string what)
     {
-        task.ContinueWith(t => Logger.Error($"Persist failed: {what}", t.Exception?.GetBaseException()),
-            TaskContinuationOptions.OnlyOnFaulted);
+        if (task.IsCompleted)
+        {
+            if (task.IsFaulted) Logger.Error($"Persist failed: {what}", task.Exception?.GetBaseException());
+            return;
+        }
+        InFlight[task] = 0;
+        task.ContinueWith(t =>
+        {
+            InFlight.TryRemove(t, out _);
+            if (t.IsFaulted) Logger.Error($"Persist failed: {what}", t.Exception?.GetBaseException());
+        }, TaskContinuationOptions.ExecuteSynchronously);
     }
 
     public static void Run(Func<Task> action, string what)
     {
         try { Run(action(), what); }
         catch (Exception ex) { Logger.Error($"Persist failed: {what}", ex); }
+    }
+
+    /// <summary>Waits for every tracked write (used on exit). Never throws.</summary>
+    public static async Task WaitAllAsync(TimeSpan timeout)
+    {
+        var pending = InFlight.Keys.ToArray();
+        if (pending.Length == 0) return;
+        try { await Task.WhenAll(pending).WaitAsync(timeout).ConfigureAwait(false); }
+        catch { /* failures are logged by the continuations; timeouts just stop waiting */ }
     }
 }
 

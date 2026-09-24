@@ -54,6 +54,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public UiStrings Strings { get; }
     public string DataFolderPath => App.DataDirectory;
+    /// <summary>Data-changing actions (reset layout, import) are only offered while the board is unlocked.</summary>
+    public bool IsEditMode => _main.IsEditMode;
 
     public IAsyncRelayCommand UseWindowsWallpaperCommand { get; }
     public IAsyncRelayCommand ResetLayoutCommand { get; }

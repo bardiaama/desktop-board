@@ -45,9 +45,10 @@ public sealed class SettingsService : ISettingsService
         lock (_gate)
         {
             if (_cache.TryGetValue(key, out var existing) && existing == value) return;
-            _cache[key] = value;
         }
+        // Write first; the cache only reflects what is really on disk.
         await _repository.SetAsync(key, value).ConfigureAwait(false);
+        lock (_gate) _cache[key] = value;
         SettingChanged?.Invoke(this, key);
     }
 

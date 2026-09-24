@@ -39,7 +39,18 @@ public sealed partial class MainWindow : Window
 
         Activated += OnActivated;
         Closed += OnClosed;
+
+        // A WS_CHILD window never receives WM_DISPLAYCHANGE, so dock/undock and resolution
+        // changes are detected by comparing monitor geometry every few seconds (a single
+        // GetMonitorInfo call; no work when nothing changed).
+        _displayWatch = DispatcherQueue.CreateTimer();
+        _displayWatch.Interval = TimeSpan.FromSeconds(3);
+        _displayWatch.IsRepeating = true;
+        _displayWatch.Tick += (_, _) => { if (_attached && _desktopHost.RefreshIfChanged()) ApplyScale(); };
+        _displayWatch.Start();
     }
+
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _displayWatch;
 
     public nint Hwnd { get; }
 

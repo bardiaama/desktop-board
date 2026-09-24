@@ -19,6 +19,9 @@ public sealed partial class BoardView : UserControl, INotifyPropertyChanged
         {
             if (e.PropertyName is nameof(MainViewModel.IsLocked) or nameof(MainViewModel.HoldToUnlock))
                 RaiseLockLabels();
+            // When the board locks, pull keyboard focus out of the body so no TextBox keeps the caret.
+            if (e.PropertyName == nameof(MainViewModel.IsLocked) && ViewModel.IsLocked)
+                Lock.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
         };
         ViewModel.Strings.PropertyChanged += (_, _) => RaiseLockLabels();
     }
@@ -42,6 +45,13 @@ public sealed partial class BoardView : UserControl, INotifyPropertyChanged
 
     private void OnPropertyChanged([CallerMemberName] string? name = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+    /// <summary>Keyboard navigation must not reach any control on a locked board.</summary>
+    private void Body_GettingFocus(Microsoft.UI.Xaml.UIElement sender, Microsoft.UI.Xaml.Input.GettingFocusEventArgs args)
+    {
+        if (ViewModel.IsLocked && !args.TryCancel())
+            args.Handled = true;
+    }
 
     private void Lock_LockRequested(object? sender, EventArgs e) => ViewModel.LockCommand.Execute(null);
     private void Lock_UnlockRequested(object? sender, EventArgs e) => ViewModel.UnlockCommand.Execute(null);

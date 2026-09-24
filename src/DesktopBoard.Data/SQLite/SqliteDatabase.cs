@@ -87,9 +87,18 @@ public sealed class SqliteDatabase : IDisposable
 
     public void Dispose()
     {
-        _connection?.Dispose();
-        _connection = null;
-        _gate.Dispose();
+        // Wait for in-flight work so the connection is never closed under a running command.
+        var acquired = _gate.Wait(TimeSpan.FromSeconds(5));
+        try
+        {
+            _connection?.Dispose();
+            _connection = null;
+        }
+        finally
+        {
+            if (acquired) _gate.Release();
+            _gate.Dispose();
+        }
     }
 
     // ---- value helpers shared by repositories ----

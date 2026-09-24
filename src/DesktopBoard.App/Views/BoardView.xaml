@@ -140,7 +140,16 @@
                Margin="{x:Bind ViewModel.WallpaperMargin, Mode=OneWay}" />
         <Rectangle Fill="#050A14" Opacity="{x:Bind ViewModel.Darkness, Mode=OneWay}" />
 
-        <Grid x:Name="Board" Padding="24,14,24,16">
+        <Grid Padding="16,14,24,16" ColumnSpacing="14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- desktop icons dock: outside the lock-gated body, so apps can be launched while locked -->
+            <controls:DesktopDockControl ViewModel="{x:Bind ViewModel.Dock}" Visibility="{x:Bind fx:Fx.Vis(ViewModel.DockEnabled), Mode=OneWay}" />
+
+        <Grid x:Name="Board" Grid.Column="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -384,6 +393,7 @@
                     </Grid>
                 </Grid>
             </Grid>
+        </Grid>
         </Grid>
     </Grid>
 </UserControl>

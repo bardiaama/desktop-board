@@ -32,7 +32,8 @@ public sealed partial class MainWindow : Window
         ApplyInsetSetting();
         _settings.SettingChanged += (_, key) =>
         {
-            if (key == SettingKeys.BoardInsetLeft) DispatcherQueue.TryEnqueue(() => { ApplyInsetSetting(); if (_desktopHost.RefreshIfChanged()) ApplyScale(); });
+            if (key is SettingKeys.BoardInsetLeft or SettingKeys.DockEnabled)
+                DispatcherQueue.TryEnqueue(() => { ApplyInsetSetting(); if (_desktopHost.RefreshIfChanged()) ApplyScale(); });
         };
         ConfigureWindow();
 
@@ -49,7 +50,7 @@ public sealed partial class MainWindow : Window
         // changes are detected by comparing monitor geometry every few seconds (a single
         // GetMonitorInfo call; no work when nothing changed).
         _displayWatch = DispatcherQueue.CreateTimer();
-        _displayWatch.Interval = TimeSpan.FromSeconds(3);
+        _displayWatch.Interval = TimeSpan.FromSeconds(1.5);
         _displayWatch.IsRepeating = true;
         _displayWatch.Tick += (_, _) => { if (_attached && _desktopHost.RefreshIfChanged()) ApplyScale(); };
         _displayWatch.Start();
@@ -64,11 +65,49 @@ public sealed partial class MainWindow : Window
 
     private bool ForcedNormalMode { get; set; }
 
-    /// <summary>The icon strip is measured automatically; the setting adds extra logical pixels.</summary>
+    /// <summary>
+    /// With the dock on, the board owns the whole work area and the shell icons are hidden.
+    /// Otherwise the icon strip is measured automatically and the setting adds extra pixels.
+    /// </summary>
     private void ApplyInsetSetting()
     {
+        var dock = _settings.GetBool(SettingKeys.DockEnabled, true);
         var extraLogical = Math.Clamp(_settings.GetDouble(SettingKeys.BoardInsetLeft, 0), 0, 400);
-        _desktopHost.SetLeftInset(auto: true, extraLogicalPx: (int)Math.Round(extraLogical));
+        _desktopHost.SetLeftInset(auto: !dock, extraLogicalPx: dock ? 0 : (int)Math.Round(extraLogical));
+        ApplyShellIcons(dock);
+    }
+
+    private bool _shellIconsHiddenByUs;
+
+    private void ApplyShellIcons(bool dock)
+    {
+        try
+        {
+            var shell = App.Current.Services.GetRequiredService<IShellIconsService>();
+            if (dock)
+            {
+                if (shell.AreVisible())
+                {
+                    shell.SetVisible(false);
+                    _shellIconsHiddenByUs = true;
+                    _ = _settings.SetAsync(SettingKeys.ShellIconsWereVisible, true);
+                }
+                else if (_settings.GetBool(SettingKeys.ShellIconsWereVisible))
+                {
+                    _shellIconsHiddenByUs = true; // hidden by a previous run that did not exit cleanly
+                }
+            }
+            else if (_shellIconsHiddenByUs || _settings.GetBool(SettingKeys.ShellIconsWereVisible))
+            {
+                shell.SetVisible(true);
+                _shellIconsHiddenByUs = false;
+                _ = _settings.SetAsync(SettingKeys.ShellIconsWereVisible, false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn("Shell icon toggle failed: " + ex.Message);
+        }
     }
 
     private void ConfigureWindow()
@@ -148,6 +187,7 @@ public sealed partial class MainWindow : Window
         {
             await Board.ViewModel.LoadAsync();
             Logger.Info("Board loaded");
+            _ = Board.ViewModel.Dock.LoadAsync(Content?.XamlRoot?.RasterizationScale ?? 1.0);
             await RunOnboardingAsync();
         }
         catch (Exception ex)
@@ -241,6 +281,8 @@ public sealed partial class MainWindow : Window
     {
         if (_flushed)
         {
+            // Give the desktop its icons back when the board goes away.
+            if (_shellIconsHiddenByUs) ApplyShellIcons(dock: false);
             _desktopHost.Detach(Hwnd);
             Logger.Info("---- session end ----");
             return;

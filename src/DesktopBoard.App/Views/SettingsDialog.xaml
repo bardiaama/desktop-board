@@ -55,7 +55,10 @@
                 <TextBlock Grid.Column="1" Text="{x:Bind fx:Fx.Scale(ViewModel.UiScale), Mode=OneWay}" Style="{StaticResource SecondaryText}" VerticalAlignment="Bottom" Margin="0,0,0,8" MinWidth="40" />
             </Grid>
 
-            <Grid ColumnSpacing="12">
+            <ToggleSwitch Header="{x:Bind ViewModel.Strings.DockEnabled}" IsOn="{x:Bind ViewModel.DockEnabled, Mode=TwoWay}" />
+            <TextBlock Text="{x:Bind ViewModel.Strings.DockHint}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,-8,0,0" />
+
+            <Grid ColumnSpacing="12" Visibility="{x:Bind fx:Fx.VisNot(ViewModel.DockEnabled), Mode=OneWay}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />

@@ -150,6 +150,17 @@ The mode is a setting (`desktop.hostMode`, default `auto`); changing it needs a 
 The wallpaper copy behind the cards is laid out over the whole monitor and shifted by
 the window offset, so it continues the real desktop around the board.
 
+**Unified desktop (default).** With `desktop.dockEnabled` on, the board covers the whole
+work area and shows the desktop's own items in a dock on the left:
+`DesktopItemsProvider` enumerates the user and public Desktop folders plus the Recycle
+Bin, renders each icon through `IShellItemImageFactory` (premultiplied BGRA for
+`WriteableBitmap`), watches both folders, and launches items with `ShellExecute`. The
+shell's own icons are hidden through the same `WM_COMMAND 0x7402` the desktop context
+menu uses (`ShellIconsService`); the previous state is remembered in
+`desktop.shellIconsWereVisible` and restored on exit or when the setting is turned off.
+If the app is killed, the icons come back via desktop right-click → View → Show desktop
+icons. The dock sits outside the lock-gated body, so apps can be launched while locked.
+
 After attaching, the window is subclassed (`GWLP_WNDPROC`) for Z-order pinning and to
 swallow minimize. Display changes (dock/undock, resolution, DPI) are detected by
 `IDesktopHostService.RefreshIfChanged()`, which `MainWindow` calls from a 3-second UI

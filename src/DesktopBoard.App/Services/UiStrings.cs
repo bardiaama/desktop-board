@@ -125,6 +125,8 @@ public sealed partial class UiStrings : ObservableObject
     public string DefaultLocked => T("شروع در حالت قفل", "Start locked");
     public string HoldToUnlockSetting => T("نگه‌داشتن برای باز کردن قفل", "Hold to unlock");
     public string GlassEffect => T("افکت شیشه‌ای کارت‌ها", "Glass effect on cards");
+    public string DockEnabled => T("آیکون‌های دسکتاپ داخل تخته (دسکتاپ یکپارچه)", "Desktop icons inside the board (unified desktop)");
+    public string DockHint => T("آیکون‌های خود ویندوز پنهان می‌شوند و تخته کل صفحه را می‌گیرد. با خاموش کردن، آیکون‌ها برمی‌گردند.", "Windows' own icons are hidden and the board covers the whole screen. Turning this off restores them.");
     public string InsetLeft => T("فاصله اضافی از آیکون‌های دسکتاپ (چپ)", "Extra left inset for desktop icons");
     public string DesktopMode => T("حالت نمایش روی دسکتاپ", "Desktop mode");
     public string ModeAuto => T("خودکار (روی دسکتاپ، تعاملی)", "Automatic (on the desktop, interactive)");

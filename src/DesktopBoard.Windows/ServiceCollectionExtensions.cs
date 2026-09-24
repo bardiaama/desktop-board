@@ -13,6 +13,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDesktopHostService, DesktopHostService>();
         services.AddSingleton<IStartupService, StartupService>();
         services.AddSingleton<ISystemWallpaperService, SystemWallpaperService>();
+        services.AddSingleton<IDesktopItemsProvider, Shell.DesktopItemsProvider>();
+        services.AddSingleton<IShellIconsService, Shell.ShellIconsService>();
         return services;
     }
 }

@@ -34,6 +34,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         DefaultLocked = settings.GetBool(SettingKeys.DefaultLocked, true);
         HoldToUnlock = settings.GetBool(SettingKeys.HoldToUnlock, true);
         GlassEnabled = settings.GetBool(SettingKeys.GlassEnabled, true);
+        DockEnabled = settings.GetBool(SettingKeys.DockEnabled, true);
         InsetLeft = settings.GetDouble(SettingKeys.BoardInsetLeft, 0);
         DesktopModeIndex = settings.GetString(SettingKeys.DesktopHostMode, "auto") switch
         {
@@ -70,6 +71,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _holdToUnlock;
     [ObservableProperty] private bool _glassEnabled;
     [ObservableProperty] private double _insetLeft;
+    [ObservableProperty] private bool _dockEnabled;
     [ObservableProperty] private int _desktopModeIndex;
     [ObservableProperty] private string _status = string.Empty;
 
@@ -103,6 +105,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnDefaultLockedChanged(bool value) { if (!_initializing) _ = _settings.SetAsync(SettingKeys.DefaultLocked, value); }
     partial void OnHoldToUnlockChanged(bool value) { if (!_initializing) _ = _settings.SetAsync(SettingKeys.HoldToUnlock, value); }
     partial void OnGlassEnabledChanged(bool value) { if (!_initializing) _ = _settings.SetAsync(SettingKeys.GlassEnabled, value); }
+    partial void OnDockEnabledChanged(bool value) { if (!_initializing) _ = _settings.SetAsync(SettingKeys.DockEnabled, value); }
     partial void OnInsetLeftChanged(double value) { if (!_initializing) _ = _settings.SetAsync(SettingKeys.BoardInsetLeft, Math.Round(value)); }
 
     partial void OnLanguageIndexChanged(int value)

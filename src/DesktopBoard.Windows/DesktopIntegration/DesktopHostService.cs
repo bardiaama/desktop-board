@@ -29,6 +29,8 @@ public sealed class DesktopHostService : IDesktopHostService
     private const uint WM_DISPLAYCHANGE = 0x007E;
     private const uint WM_DPICHANGED = 0x02E0;
     private const uint WM_DPICHANGED_AFTERPARENT = 0x02E3;
+    private const uint WM_APP_RECHECK_DESKTOP = 0x8000 + 41;
+    private System.Threading.Timer? _recheck;
 
     private WndProc? _subclassProc;   // kept alive for the lifetime of the subclass
     private nint _originalWndProc;
@@ -310,6 +312,8 @@ public sealed class DesktopHostService : IDesktopHostService
 
     private void RemoveShowDesktopWatch()
     {
+        _recheck?.Dispose();
+        _recheck = null;
         if (_winEventHook != nint.Zero) UnhookWinEvent(_winEventHook);
         _winEventHook = nint.Zero;
         _winEventProc = null;
@@ -317,7 +321,11 @@ public sealed class DesktopHostService : IDesktopHostService
 
     private void OnWinEvent(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint thread, uint time)
     {
-        if (eventType is EVENT_SYSTEM_FOREGROUND or EVENT_SYSTEM_MINIMIZEEND) UpdateShowDesktopState();
+        if (eventType is not (EVENT_SYSTEM_FOREGROUND or EVENT_SYSTEM_MINIMIZEEND)) return;
+        UpdateShowDesktopState();
+        // The shell re-orders windows shortly *after* the foreground change; look again twice.
+        _recheck ??= new System.Threading.Timer(_ => { if (_hwnd != nint.Zero) PostMessage(_hwnd, WM_APP_RECHECK_DESKTOP, 0, 0); });
+        _recheck.Change(350, 900);
     }
 
     /// <summary>
@@ -403,6 +411,10 @@ public sealed class DesktopHostService : IDesktopHostService
                 SetWindowPos(hWnd, HWND_BOTTOM, x, y, w, h, SWP_NOACTIVATE);
                 return result;
             }
+            case WM_APP_RECHECK_DESKTOP:
+                UpdateShowDesktopState();
+                _recheck?.Change(Timeout.Infinite, Timeout.Infinite);
+                return nint.Zero;
             case WM_DISPLAYCHANGE:
             case WM_DPICHANGED:
             case WM_DPICHANGED_AFTERPARENT:

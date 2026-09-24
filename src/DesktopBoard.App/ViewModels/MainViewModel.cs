@@ -30,7 +30,8 @@ public sealed partial class MainViewModel : ObservableObject
         IProjectRepository projects,
         IMeetingRepository meetings,
         INoteRepository notes,
-        IStickyNoteRepository stickies)
+        IStickyNoteRepository stickies,
+        IDesktopItemsProvider desktopItems)
     {
         _state = state;
         _settings = settings;
@@ -50,6 +51,7 @@ public sealed partial class MainViewModel : ObservableObject
         Meetings = new MeetingListViewModel(meetings, state, strings);
         WorkNote = new NoteViewModel(notes, state, Section.Work, "یادداشت سریع");
         PersonalNote = new NoteViewModel(notes, state, Section.Personal, "یادداشت‌ها");
+        Dock = new DesktopDockViewModel(desktopItems);
         WorkIdeas = new StickyBoardViewModel(stickies, state, strings, Section.Work);
         PersonalIdeas = new StickyBoardViewModel(stickies, state, strings, Section.Personal);
 
@@ -83,6 +85,7 @@ public sealed partial class MainViewModel : ObservableObject
     public MeetingListViewModel Meetings { get; }
     public NoteViewModel WorkNote { get; }
     public NoteViewModel PersonalNote { get; }
+    public DesktopDockViewModel Dock { get; }
     public StickyBoardViewModel WorkIdeas { get; }
     public StickyBoardViewModel PersonalIdeas { get; }
 
@@ -108,6 +111,8 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>The scale actually applied by the window.</summary>
     [ObservableProperty] private double _effectiveUiScale = 1.0;
     [ObservableProperty] private bool _glassEnabled = true;
+    /// <summary>Desktop icons are shown inside the board (and hidden on the shell desktop).</summary>
+    [ObservableProperty] private bool _dockEnabled = true;
     /// <summary>Logical pixels kept free on the left so desktop icons do not cover the board.</summary>
     [ObservableProperty] private double _insetLeft;
     [ObservableProperty] private bool _isLoaded;
@@ -145,6 +150,7 @@ public sealed partial class MainViewModel : ObservableObject
         var scale = _settings.GetDouble(SettingKeys.UiScale, 0);
         UiScale = scale > 0 ? Math.Clamp(scale, 0.7, 1.6) : 0;
         GlassEnabled = _settings.GetBool(SettingKeys.GlassEnabled, true);
+        DockEnabled = _settings.GetBool(SettingKeys.DockEnabled, true);
         InsetLeft = Math.Clamp(_settings.GetDouble(SettingKeys.BoardInsetLeft, 0), 0, 400);
     }
 

@@ -16,4 +16,6 @@ public static class SettingKeys
     public const string DesktopHostMode = "desktop.hostMode";        // "auto" | "embedded" | "bottommost" | "normal"
     public const string GlassEnabled = "ui.glass";                   // true/false (acrylic on cards)
     public const string BoardInsetLeft = "board.insetLeft";          // px kept free on the left for desktop icons
+    public const string DockEnabled = "desktop.dockEnabled";         // true: desktop icons live inside the board, shell icons hidden
+    public const string ShellIconsWereVisible = "desktop.shellIconsWereVisible"; // remembered so exit can restore them
 }

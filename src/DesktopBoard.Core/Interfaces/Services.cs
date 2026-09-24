@@ -88,6 +88,24 @@ public interface IDesktopHostService
     bool RefreshIfChanged();
 }
 
+/// <summary>Reads the items on the Windows desktop (user + public) and launches them.</summary>
+public interface IDesktopItemsProvider : IDisposable
+{
+    /// <param name="iconSizePx">Requested icon size in physical pixels.</param>
+    Task<IReadOnlyList<DesktopItem>> GetItemsAsync(int iconSizePx);
+    /// <summary>Raised (on a background thread) when the desktop folders change.</summary>
+    event EventHandler? Changed;
+    void Launch(DesktopItem item);
+    void ShowInFolder(DesktopItem item);
+}
+
+/// <summary>Shows or hides the shell's own desktop icons (the "Show desktop icons" toggle).</summary>
+public interface IShellIconsService
+{
+    bool AreVisible();
+    void SetVisible(bool visible);
+}
+
 /// <summary>"Start Desktop Board with Windows" via the per-user Run key.</summary>
 public interface IStartupService
 {

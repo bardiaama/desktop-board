@@ -105,6 +105,7 @@ internal static partial class NativeMethods
     [DllImport("user32.dll", SetLastError = true)] public static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
     [DllImport("user32.dll")] public static extern bool ShowWindow(nint hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern nint SendMessage(nint hWnd, uint Msg, nint wParam, nint lParam);
+    [DllImport("user32.dll")] public static extern bool PostMessage(nint hWnd, uint Msg, nint wParam, nint lParam);
     [DllImport("user32.dll", SetLastError = true)] public static extern nint SendMessageTimeout(nint hWnd, uint Msg, nint wParam, nint lParam, uint fuFlags, uint uTimeout, out nint lpdwResult);
     [DllImport("user32.dll")] public static extern int GetSystemMetrics(int nIndex);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(nint hWnd);

@@ -24,7 +24,7 @@ automatically. Persian (RTL) is a first-class citizen; labels are bilingual.
 ## Install
 
 1. Download `DesktopBoard-Setup-<version>.exe` from the
-   [latest release](https://github.com/Rima-ex/desktop-board/releases/latest).
+   [latest release](https://github.com/bardiaama/desktop-board/releases/latest).
 2. Run it. No administrator rights are needed; it installs under your user profile and
    bundles the .NET and Windows App SDK runtimes.
 3. Windows 10 1809 or later (Windows 11 recommended).

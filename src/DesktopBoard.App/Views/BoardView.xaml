@@ -1,0 +1,384 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="DesktopBoard.App.Views.BoardView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:DesktopBoard.App.Controls"
+    xmlns:vm="using:DesktopBoard.App.ViewModels"
+    xmlns:fx="using:DesktopBoard.App.Converters"
+    FlowDirection="LeftToRight"
+    IsTabStop="False">
+
+    <UserControl.KeyboardAccelerators>
+        <KeyboardAccelerator Modifiers="Control,Shift" Key="L" Invoked="ToggleLock_Invoked" />
+        <KeyboardAccelerator Modifiers="Control" Key="Escape" Invoked="Lock_Invoked" />
+    </UserControl.KeyboardAccelerators>
+
+    <UserControl.Resources>
+        <!-- one project row -->
+        <DataTemplate x:Key="ProjectTemplate" x:DataType="vm:ProjectItemViewModel">
+            <Grid MinHeight="38" Margin="0,1" Padding="4,2,2,2" CornerRadius="8" ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Button Style="{StaticResource IconButton}" Width="24" Height="24" Command="{x:Bind CycleColorCommand}"
+                        IsHitTestVisible="{x:Bind Owner.IsEditMode, Mode=OneWay}" ToolTipService.ToolTip="Color">
+                    <Ellipse Width="12" Height="12" Fill="{x:Bind fx:Fx.Brush(Color), Mode=OneWay}" />
+                </Button>
+
+                <Grid Grid.Column="1" VerticalAlignment="Center">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <TextBlock Text="{x:Bind Name, Mode=OneWay}" Style="{StaticResource BodyText}" FontSize="15.5" Padding="6,3,6,3"
+                                   Visibility="{x:Bind fx:Fx.VisNot(Owner.IsEditMode), Mode=OneWay}" />
+                        <TextBox Text="{x:Bind Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GhostTextBox}" FontSize="15.5" Padding="6,3,6,3"
+                                 Visibility="{x:Bind fx:Fx.Vis(Owner.IsEditMode), Mode=OneWay}" />
+                    </Grid>
+                    <!-- progress line -->
+                    <Grid Grid.Row="1" Height="3" Margin="6,2,6,0" CornerRadius="2" Background="#1AFFFFFF" HorizontalAlignment="Stretch"
+                          Visibility="{x:Bind fx:Fx.Vis(HasProgress), Mode=OneWay}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="{x:Bind fx:Fx.StarOf(Progress), Mode=OneWay}" />
+                            <ColumnDefinition Width="{x:Bind fx:Fx.StarRest(Progress), Mode=OneWay}" />
+                        </Grid.ColumnDefinitions>
+                        <Rectangle Fill="{x:Bind fx:Fx.Brush(Color), Mode=OneWay}" RadiusX="2" RadiusY="2" />
+                    </Grid>
+                </Grid>
+
+                <TextBlock Grid.Column="2" Text="{x:Bind StatusText, Mode=OneWay}" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" />
+
+                <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="&#xE76C;" FontSize="12" ToolTipService.ToolTip="Details">
+                    <Button.Flyout>
+                        <Flyout Placement="Bottom">
+                            <Flyout.FlyoutPresenterStyle>
+                                <Style TargetType="FlyoutPresenter">
+                                    <Setter Property="Background" Value="#F2101828" />
+                                    <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+                                    <Setter Property="CornerRadius" Value="12" />
+                                    <Setter Property="Padding" Value="16" />
+                                    <Setter Property="MinWidth" Value="320" />
+                                </Style>
+                            </Flyout.FlyoutPresenterStyle>
+                            <StackPanel Spacing="10" MinWidth="280">
+                                <TextBlock Text="{x:Bind Name, Mode=OneWay}" Style="{StaticResource CardTitleText}" />
+                                <TextBox Header="Description / توضیحات" Text="{x:Bind Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72" IsEnabled="{x:Bind Owner.IsEditMode, Mode=OneWay}" />
+                                <ComboBox Header="Status / وضعیت" SelectedIndex="{x:Bind StatusIndex, Mode=TwoWay}" HorizontalAlignment="Stretch"
+                                          IsEnabled="{x:Bind Owner.IsEditMode, Mode=OneWay}">
+                                    <ComboBoxItem Content="Active / فعال" />
+                                    <ComboBoxItem Content="On hold / متوقف" />
+                                    <ComboBoxItem Content="Done / انجام شده" />
+                                </ComboBox>
+                                <ToggleSwitch Header="Progress / پیشرفت" IsOn="{x:Bind HasProgress, Mode=TwoWay}" IsEnabled="{x:Bind Owner.IsEditMode, Mode=OneWay}" />
+                                <Slider Minimum="0" Maximum="100" StepFrequency="5" Value="{x:Bind Progress, Mode=TwoWay}" IsEnabled="{x:Bind fx:Fx.And(Owner.IsEditMode, HasProgress), Mode=OneWay}" />
+                                <Button Content="Delete project / حذف پروژه" Command="{x:Bind DeleteCommand}" Visibility="{x:Bind fx:Fx.Vis(Owner.IsEditMode), Mode=OneWay}" HorizontalAlignment="Right" />
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+            </Grid>
+        </DataTemplate>
+
+        <!-- one meeting row: [dot] [time] ......... [title, right-aligned] -->
+        <DataTemplate x:Key="MeetingTemplate" x:DataType="vm:MeetingItemViewModel">
+            <Grid MinHeight="36" Margin="0,1" Padding="4,0,2,0" CornerRadius="8" ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button Style="{StaticResource IconButton}" Width="24" Height="24" Command="{x:Bind CycleColorCommand}" IsHitTestVisible="{x:Bind Owner.IsEditMode, Mode=OneWay}">
+                    <Ellipse Width="12" Height="12" Fill="{x:Bind fx:Fx.Brush(Color), Mode=OneWay}" />
+                </Button>
+                <Grid Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{x:Bind TimeText, Mode=OneWay}" Style="{StaticResource BodyText}" FontSize="15" MinWidth="50" Padding="6,4,6,4"
+                               Visibility="{x:Bind fx:Fx.VisNot(Owner.IsEditMode), Mode=OneWay}" />
+                    <TextBox Text="{x:Bind TimeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GhostTextBox}" Width="62" PlaceholderText="--:--"
+                             Visibility="{x:Bind fx:Fx.Vis(Owner.IsEditMode), Mode=OneWay}" />
+                </Grid>
+                <Grid Grid.Column="2" VerticalAlignment="Center" FlowDirection="RightToLeft">
+                    <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource BodyText}" Padding="6,4,6,4" TextAlignment="Left"
+                               Visibility="{x:Bind fx:Fx.VisNot(Owner.IsEditMode), Mode=OneWay}" />
+                    <TextBox Text="{x:Bind Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GhostTextBox}" TextAlignment="Left"
+                             Visibility="{x:Bind fx:Fx.Vis(Owner.IsEditMode), Mode=OneWay}" />
+                </Grid>
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
+                    <TextBlock Text="{x:Bind DateText, Mode=OneWay}" Style="{StaticResource MutedText}" Visibility="{x:Bind fx:Fx.VisIfText(DateText), Mode=OneWay}" />
+                    <Button Style="{StaticResource IconButton}" Content="&#xE74D;" Command="{x:Bind DeleteCommand}" Opacity="0.75"
+                            Visibility="{x:Bind fx:Fx.Vis(Owner.IsEditMode), Mode=OneWay}" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- calendar strip cell -->
+        <DataTemplate x:Key="DayCellTemplate" x:DataType="vm:DayCellViewModel">
+            <Grid Width="34" Height="46" Margin="1,0">
+                <Border CornerRadius="10" Background="{StaticResource WorkAccentBrush}" Visibility="{x:Bind fx:Fx.Vis(IsToday), Mode=OneWay}" />
+                <StackPanel VerticalAlignment="Center" Spacing="1">
+                    <TextBlock Text="{x:Bind Letter}" Style="{StaticResource MutedText}" FontSize="11.5" HorizontalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" />
+                    <TextBlock Text="{x:Bind Number}" Style="{StaticResource BodyText}" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+    </UserControl.Resources>
+
+    <Grid x:Name="Root" Background="{StaticResource BoardBackdropBrush}">
+        <!-- wallpaper + darkening overlay -->
+        <Image Source="{x:Bind ViewModel.BackgroundImage, Mode=OneWay}" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <Rectangle Fill="#050A14" Opacity="{x:Bind ViewModel.Darkness, Mode=OneWay}" />
+
+        <Grid x:Name="Board" Padding="{x:Bind fx:Fx.BoardPadding(ViewModel.InsetLeft), Mode=OneWay}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- HEADER -->
+            <Grid Margin="6,0,6,12" MinHeight="74">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- clock -->
+                <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                    <TextBlock Text="{x:Bind ViewModel.Clock.Time, Mode=OneWay}" Style="{StaticResource ClockText}" />
+                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{x:Bind ViewModel.Clock.GregorianDate, Mode=OneWay}" Style="{StaticResource BodyText}" FontSize="16" />
+                        <TextBlock Text="{x:Bind ViewModel.Clock.PersianDate, Mode=OneWay}" Style="{StaticResource SecondaryText}" FontSize="14" FlowDirection="RightToLeft" TextAlignment="Right" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- lock / edit -->
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="6">
+                    <controls:LockToggle x:Name="Lock"
+                                         IsLocked="{x:Bind ViewModel.IsLocked, Mode=OneWay}"
+                                         HoldToUnlock="{x:Bind ViewModel.HoldToUnlock, Mode=OneWay}"
+                                         Title="{x:Bind LockTitle, Mode=OneWay}"
+                                         Subtitle="{x:Bind LockSubtitle, Mode=OneWay}"
+                                         LockRequested="Lock_LockRequested"
+                                         UnlockRequested="Lock_UnlockRequested" />
+                    <TextBlock Text="{x:Bind LockHint, Mode=OneWay}" Style="{StaticResource MutedText}" HorizontalAlignment="Center" FontSize="12" Opacity="0.85" />
+                </StackPanel>
+
+                <!-- calendar strip + settings -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="10">
+                    <Border CornerRadius="14" Background="{StaticResource PillGlassBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" Padding="8,4">
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.Clock.Week, Mode=OneWay}" ItemTemplate="{StaticResource DayCellTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </Border>
+                    <Button x:Name="SettingsButton" Style="{StaticResource IconButton}" Width="40" Height="40" CornerRadius="12" Content="&#xE713;" FontSize="16"
+                            Background="{StaticResource PillGlassBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+                            Click="Settings_Click" ToolTipService.ToolTip="{x:Bind ViewModel.Strings.Settings, Mode=OneWay}" />
+                </StackPanel>
+            </Grid>
+
+            <!-- BODY -->
+            <Grid Grid.Row="1" IsHitTestVisible="{x:Bind ViewModel.IsEditMode, Mode=OneWay}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- WORK column -->
+                <Grid Grid.Column="0" Margin="0,0,14,0" RowSpacing="12" ColumnSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="0.95*" />
+                        <RowDefinition Height="1.25*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.1*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="12" Margin="4,0,0,2">
+                        <Border Width="40" Height="40" CornerRadius="12" Background="#2660A5FA">
+                            <FontIcon Glyph="&#xE821;" FontFamily="{StaticResource IconFont}" FontSize="18" Foreground="{StaticResource WorkAccentBrush}" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="{x:Bind ViewModel.Strings.Work, Mode=OneWay}" Style="{StaticResource SectionTitleText}" />
+                                <TextBlock Text="/" Style="{StaticResource SectionTitleText}" Foreground="{StaticResource TextMutedBrush}" Visibility="{x:Bind fx:Fx.VisIfText(ViewModel.Strings.WorkSub), Mode=OneWay}" />
+                                <TextBlock Text="{x:Bind ViewModel.Strings.WorkSub, Mode=OneWay}" Style="{StaticResource SectionTitleText}" FontWeight="Normal" Foreground="{StaticResource TextSecondaryBrush}" />
+                            </StackPanel>
+                            <Rectangle Height="3" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource WorkUnderlineBrush}" Margin="2,2,10,0" RenderTransformOrigin="0,0.5">
+                                <Rectangle.RenderTransform><RotateTransform Angle="-1.2" /></Rectangle.RenderTransform>
+                            </Rectangle>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <controls:BoardCard Grid.Row="1" Grid.Column="0" Icon="&#xE8F1;" Title="{x:Bind ViewModel.Strings.WorkGoals, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.WorkGoalsSub, Mode=OneWay}"
+                                        Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">
+                        <controls:BoardCard.HeaderContent>
+                            <TextBlock Text="{x:Bind ViewModel.WorkGoals.CounterText, Mode=OneWay}" Style="{StaticResource MutedText}" />
+                        </controls:BoardCard.HeaderContent>
+                        <controls:ChecklistControl ViewModel="{x:Bind ViewModel.WorkGoals}" />
+                    </controls:BoardCard>
+
+                    <controls:BoardCard Grid.Row="1" Grid.Column="1" Icon="&#xE8B7;" Title="{x:Bind ViewModel.Strings.ActiveProjects, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.ActiveProjectsSub, Mode=OneWay}"
+                                        Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">
+                        <controls:BoardCard.HeaderContent>
+                            <Button Style="{StaticResource IconButton}" Content="&#xE710;" Command="{x:Bind ViewModel.Projects.AddCommand}" Visibility="{x:Bind fx:Fx.Vis(ViewModel.IsEditMode), Mode=OneWay}" />
+                        </controls:BoardCard.HeaderContent>
+                        <ListView Style="{StaticResource BoardListView}" ItemsSource="{x:Bind ViewModel.Projects.Items, Mode=OneWay}" ItemTemplate="{StaticResource ProjectTemplate}"
+                                  CanReorderItems="{x:Bind ViewModel.IsEditMode, Mode=OneWay}" CanDragItems="{x:Bind ViewModel.IsEditMode, Mode=OneWay}" AllowDrop="{x:Bind ViewModel.IsEditMode, Mode=OneWay}">
+                            <ListView.Resources>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#0FFFFFFF" />
+                                <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="#18FFFFFF" />
+                            </ListView.Resources>
+                        </ListView>
+                    </controls:BoardCard>
+
+                    <controls:BoardCard Grid.Row="2" Grid.Column="0" Icon="&#xE73A;" Title="{x:Bind ViewModel.Strings.TodayTasks, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.TodayTasksSub, Mode=OneWay}"
+                                        Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">
+                        <controls:BoardCard.HeaderContent>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE823;" FontFamily="{StaticResource IconFont}" FontSize="12" Foreground="{StaticResource WorkAccentBrush}" />
+                                <TextBlock Text="{x:Bind ViewModel.WorkToday.CounterText, Mode=OneWay}" Style="{StaticResource SecondaryText}" />
+                            </StackPanel>
+                        </controls:BoardCard.HeaderContent>
+                        <controls:ChecklistControl ViewModel="{x:Bind ViewModel.WorkToday}" />
+                    </controls:BoardCard>
+
+                    <Grid Grid.Row="2" Grid.Column="1" RowSpacing="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="1.15*" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <controls:BoardCard Icon="&#xE787;" Title="{x:Bind ViewModel.Strings.Meetings, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.MeetingsSub, Mode=OneWay}"
+                                            Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">
+                            <controls:BoardCard.HeaderContent>
+                                <Button Style="{StaticResource IconButton}" Content="&#xE710;" Command="{x:Bind ViewModel.Meetings.AddCommand}" Visibility="{x:Bind fx:Fx.Vis(ViewModel.IsEditMode), Mode=OneWay}" />
+                            </controls:BoardCard.HeaderContent>
+                            <ScrollViewer Style="{StaticResource BoardScrollViewer}">
+                                <ItemsControl ItemsSource="{x:Bind ViewModel.Meetings.Items, Mode=OneWay}" ItemTemplate="{StaticResource MeetingTemplate}" />
+                            </ScrollViewer>
+                        </controls:BoardCard>
+                        <controls:BoardCard Grid.Row="1" Icon="&#xEA80;" Title="{x:Bind ViewModel.Strings.QuickNotes, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.QuickNotesSub, Mode=OneWay}"
+                                            Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">
+                            <Grid FlowDirection="RightToLeft">
+                                <TextBlock Text="{x:Bind ViewModel.WorkNote.Content, Mode=OneWay}" Style="{StaticResource BodyText}" TextWrapping="Wrap" LineHeight="24" Padding="6" VerticalAlignment="Top" TextTrimming="CharacterEllipsis"
+                                           Visibility="{x:Bind fx:Fx.VisNot(ViewModel.IsEditMode), Mode=OneWay}" />
+                                <TextBox Text="{x:Bind ViewModel.WorkNote.Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GhostTextArea}"
+                                         PlaceholderText="{x:Bind ViewModel.Strings.NotePlaceholder, Mode=OneWay}" Visibility="{x:Bind fx:Fx.Vis(ViewModel.IsEditMode), Mode=OneWay}" />
+                            </Grid>
+                        </controls:BoardCard>
+                    </Grid>
+
+                    <controls:BoardCard Grid.Row="3" Grid.ColumnSpan="2" Icon="&#xEA86;" Title="{x:Bind ViewModel.Strings.Ideas, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.IdeasSub, Mode=OneWay}"
+                                        Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">
+                        <controls:StickyBoardControl ViewModel="{x:Bind ViewModel.WorkIdeas}" Height="112" />
+                    </controls:BoardCard>
+                </Grid>
+
+                <!-- divider -->
+                <Rectangle Grid.Column="1" Width="1" Margin="0,8" RadiusX="0.5" RadiusY="0.5">
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#00FFFFFF" Offset="0" />
+                            <GradientStop Color="#40FFFFFF" Offset="0.5" />
+                            <GradientStop Color="#00FFFFFF" Offset="1" />
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+
+                <!-- PERSONAL column -->
+                <Grid Grid.Column="2" Margin="14,0,0,0" RowSpacing="12" ColumnSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="0.95*" />
+                        <RowDefinition Height="1.25*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="1.1*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="12" Margin="4,0,0,2">
+                        <Border Width="40" Height="40" CornerRadius="12" Background="#26FB7185">
+                            <FontIcon Glyph="&#xE80F;" FontFamily="{StaticResource IconFont}" FontSize="18" Foreground="{StaticResource PersonalAccentBrush}" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="{x:Bind ViewModel.Strings.Personal, Mode=OneWay}" Style="{StaticResource SectionTitleText}" />
+                                <TextBlock Text="/" Style="{StaticResource SectionTitleText}" Foreground="{StaticResource TextMutedBrush}" Visibility="{x:Bind fx:Fx.VisIfText(ViewModel.Strings.PersonalSub), Mode=OneWay}" />
+                                <TextBlock Text="{x:Bind ViewModel.Strings.PersonalSub, Mode=OneWay}" Style="{StaticResource SectionTitleText}" FontWeight="Normal" Foreground="{StaticResource TextSecondaryBrush}" />
+                            </StackPanel>
+                            <Rectangle Height="3" RadiusX="1.5" RadiusY="1.5" Fill="{StaticResource PersonalUnderlineBrush}" Margin="2,2,10,0" RenderTransformOrigin="0,0.5">
+                                <Rectangle.RenderTransform><RotateTransform Angle="1.2" /></Rectangle.RenderTransform>
+                            </Rectangle>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <controls:BoardCard Grid.Row="1" Grid.Column="0" Style="{StaticResource PersonalCard}" Icon="&#xE8F1;" Title="{x:Bind ViewModel.Strings.PersonalGoals, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.PersonalGoalsSub, Mode=OneWay}"
+                                        Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">
+                        <controls:BoardCard.HeaderContent>
+                            <TextBlock Text="{x:Bind ViewModel.PersonalGoals.CounterText, Mode=OneWay}" Style="{StaticResource MutedText}" />
+                        </controls:BoardCard.HeaderContent>
+                        <controls:ChecklistControl ViewModel="{x:Bind ViewModel.PersonalGoals}" />
+                    </controls:BoardCard>
+
+                    <controls:BoardCard Grid.Row="1" Grid.Column="1" Style="{StaticResource PersonalCard}" Icon="&#xE945;" Title="{x:Bind ViewModel.Strings.TodayTasks, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.TodayTasksSub, Mode=OneWay}"
+                                        Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">
+                        <controls:BoardCard.HeaderContent>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE823;" FontFamily="{StaticResource IconFont}" FontSize="12" Foreground="{StaticResource PersonalAccentBrush}" />
+                                <TextBlock Text="{x:Bind ViewModel.PersonalToday.CounterText, Mode=OneWay}" Style="{StaticResource SecondaryText}" />
+                            </StackPanel>
+                        </controls:BoardCard.HeaderContent>
+                        <controls:ChecklistControl ViewModel="{x:Bind ViewModel.PersonalToday}" />
+                    </controls:BoardCard>
+
+                    <controls:BoardCard Grid.Row="2" Grid.Column="0" Style="{StaticResource PersonalCard}" Icon="&#xE787;" Title="{x:Bind ViewModel.Strings.ThisWeek, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.ThisWeekSub, Mode=OneWay}"
+                                        Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">
+                        <controls:ChecklistControl ViewModel="{x:Bind ViewModel.Week}" />
+                    </controls:BoardCard>
+
+                    <controls:BoardCard Grid.Row="2" Grid.Column="1" Style="{StaticResource PersonalCard}" Icon="&#xE70B;" Title="{x:Bind ViewModel.Strings.Notes, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.NotesSub, Mode=OneWay}"
+                                        Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">
+                        <Grid FlowDirection="RightToLeft">
+                            <TextBlock Text="{x:Bind ViewModel.PersonalNote.Content, Mode=OneWay}" Style="{StaticResource BodyText}" TextWrapping="Wrap" LineHeight="24" Padding="6" VerticalAlignment="Top" TextTrimming="CharacterEllipsis"
+                                       Visibility="{x:Bind fx:Fx.VisNot(ViewModel.IsEditMode), Mode=OneWay}" />
+                            <TextBox Text="{x:Bind ViewModel.PersonalNote.Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GhostTextArea}"
+                                     PlaceholderText="{x:Bind ViewModel.Strings.NotePlaceholder, Mode=OneWay}" Visibility="{x:Bind fx:Fx.Vis(ViewModel.IsEditMode), Mode=OneWay}" />
+                        </Grid>
+                    </controls:BoardCard>
+
+                    <Grid Grid.Row="3" Grid.ColumnSpan="2" ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.35*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <controls:BoardCard Grid.Column="0" Style="{StaticResource PersonalCard}" Icon="&#xE734;" Title="{x:Bind ViewModel.Strings.IdeasPlans, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.IdeasPlansSub, Mode=OneWay}"
+                                            Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">
+                            <controls:StickyBoardControl ViewModel="{x:Bind ViewModel.PersonalIdeas}" Height="112" />
+                        </controls:BoardCard>
+                        <controls:BoardCard Grid.Column="1" Style="{StaticResource PersonalCard}" Icon="&#xE81C;" Title="{x:Bind ViewModel.Strings.FutureTasks, Mode=OneWay}" Subtitle="{x:Bind ViewModel.Strings.FutureTasksSub, Mode=OneWay}"
+                                            Glass="{x:Bind ViewModel.GlassEnabled, Mode=OneWay}">
+                            <controls:ChecklistControl ViewModel="{x:Bind ViewModel.Future}" />
+                        </controls:BoardCard>
+                    </Grid>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

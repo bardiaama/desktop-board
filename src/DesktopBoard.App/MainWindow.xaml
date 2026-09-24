@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="DesktopBoard.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:views="using:DesktopBoard.App.Views"
+    Title="Desktop Board">
+
+    <Grid x:Name="Host" SizeChanged="Host_SizeChanged" Background="#0B1220">
+        <!-- A Canvas gives the board an unbounded layout slot, so a UI scale below 1.0 (board laid
+             out larger than the window, then scaled down) is not cut off by the layout clip. -->
+        <Canvas>
+            <views:BoardView x:Name="Board" Canvas.Left="0" Canvas.Top="0" Loaded="Board_Loaded" />
+        </Canvas>
+    </Grid>
+</Window>

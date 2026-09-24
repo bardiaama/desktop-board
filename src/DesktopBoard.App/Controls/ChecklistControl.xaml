@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="DesktopBoard.App.Controls.ChecklistControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:DesktopBoard.App.ViewModels"
+    xmlns:fx="using:DesktopBoard.App.Converters"
+    FlowDirection="LeftToRight"
+    IsTabStop="False">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ListView x:Name="List"
+                  Style="{StaticResource BoardListView}"
+                  ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}"
+                  CanReorderItems="{x:Bind ViewModel.IsEditMode, Mode=OneWay}"
+                  CanDragItems="{x:Bind ViewModel.IsEditMode, Mode=OneWay}"
+                  AllowDrop="{x:Bind ViewModel.IsEditMode, Mode=OneWay}">
+            <ListView.Resources>
+                <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#0FFFFFFF" />
+                <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="#18FFFFFF" />
+                <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="Transparent" />
+                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#0FFFFFFF" />
+            </ListView.Resources>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="vm:ChecklistItemViewModel">
+                    <!-- LTR structure (checkbox left, meta right) with RTL text, matching the board design. -->
+                    <Grid MinHeight="34" Margin="0,1" Padding="4,0,2,0" CornerRadius="8" ColumnSpacing="8"
+                          Opacity="{x:Bind fx:Fx.CompletedOpacity(IsCompleted), Mode=OneWay}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- leading: checkbox -->
+                        <CheckBox Grid.Column="0" Style="{StaticResource CardCheckBox}"
+                                  IsChecked="{x:Bind IsCompleted, Mode=TwoWay}"
+                                  Visibility="{x:Bind fx:Fx.Vis(Owner.ShowCheckbox)}" />
+
+                        <!-- weekday (This Week card) -->
+                        <TextBlock Grid.Column="1" Text="{x:Bind DayName, Mode=OneWay}" Style="{StaticResource SecondaryText}" MinWidth="60" FlowDirection="RightToLeft" TextAlignment="Right"
+                                   Visibility="{x:Bind fx:Fx.Vis(Owner.ShowDay)}" />
+
+                        <!-- title: TextBlock when locked, TextBox when editing -->
+                        <Grid Grid.Column="2" VerticalAlignment="Center" FlowDirection="RightToLeft">
+                            <TextBlock Text="{x:Bind Title, Mode=OneWay}" Style="{StaticResource BodyText}" Padding="6,4,6,4"
+                                       TextAlignment="{x:Bind fx:Fx.Align(Owner.AlignTitleRight)}"
+                                       TextDecorations="{x:Bind fx:Fx.Strike(IsCompleted), Mode=OneWay}"
+                                       Visibility="{x:Bind fx:Fx.VisNot(Owner.IsEditMode), Mode=OneWay}" />
+                            <TextBox Text="{x:Bind Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource GhostTextBox}"
+                                     TextAlignment="{x:Bind fx:Fx.Align(Owner.AlignTitleRight)}"
+                                     Visibility="{x:Bind fx:Fx.Vis(Owner.IsEditMode), Mode=OneWay}" />
+                        </Grid>
+
+                        <!-- trailing: time / number / dot -->
+                        <Grid Grid.Column="3" VerticalAlignment="Center">
+                            <Grid Visibility="{x:Bind fx:Fx.Vis(Owner.ShowTime)}">
+                                <TextBlock Text="{x:Bind TimeText, Mode=OneWay}" Style="{StaticResource SecondaryText}" FontSize="13.5" MinWidth="44" TextAlignment="Right" Padding="6,4,6,4"
+                                           Visibility="{x:Bind fx:Fx.VisNot(Owner.IsEditMode), Mode=OneWay}" />
+                                <TextBox Text="{x:Bind TimeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource GhostTextBox}"
+                                         FontSize="13.5" Foreground="{StaticResource TextSecondaryBrush}" Width="58" TextAlignment="Center" PlaceholderText="--:--"
+                                         Visibility="{x:Bind fx:Fx.Vis(Owner.IsEditMode), Mode=OneWay}" />
+                            </Grid>
+                            <Border Width="22" Height="22" CornerRadius="11" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+                                    Visibility="{x:Bind fx:Fx.Vis(Owner.ShowNumber)}">
+                                <TextBlock Text="{x:Bind fx:Fx.PersianInt(Number), Mode=OneWay}" Style="{StaticResource MutedText}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="11.5" />
+                            </Border>
+                            <Ellipse Width="11" Height="11" Margin="6,0" Fill="{x:Bind fx:Fx.Brush(Color), Mode=OneWay}"
+                                     Visibility="{x:Bind fx:Fx.Vis(Owner.ShowDot)}" />
+                        </Grid>
+
+                        <!-- delete (edit mode only) -->
+                        <Button Grid.Column="4" Style="{StaticResource IconButton}" Content="&#xE74D;" Command="{x:Bind DeleteCommand}"
+                                Visibility="{x:Bind fx:Fx.Vis(Owner.IsEditMode), Mode=OneWay}" Opacity="0.75" />
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <!-- add row (edit mode only) -->
+        <Grid Grid.Row="1" Margin="4,4,2,0" ColumnSpacing="8" Visibility="{x:Bind fx:Fx.Vis(ViewModel.IsEditMode), Mode=OneWay}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Button Style="{StaticResource IconButton}" Content="&#xE710;" Command="{x:Bind ViewModel.AddCommand, Mode=OneWay}" Width="26" Height="26" />
+            <TextBox Grid.Column="1" x:Name="AddBox" Style="{StaticResource GhostTextBox}"
+                     Text="{x:Bind ViewModel.NewItemText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     PlaceholderText="{x:Bind ViewModel.AddPlaceholder, Mode=OneWay}"
+                     Foreground="{StaticResource TextSecondaryBrush}" FlowDirection="RightToLeft" TextAlignment="Right"
+                     KeyDown="AddBox_KeyDown" />
+        </Grid>
+    </Grid>
+</UserControl>

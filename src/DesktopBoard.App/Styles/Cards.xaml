@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:DesktopBoard.App.Controls">
+
+    <ThemeShadow x:Key="CardShadow" />
+
+    <Style x:Key="BoardCardStyle" TargetType="controls:BoardCard">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Accent" Value="{StaticResource WorkAccentBrush}" />
+        <Setter Property="AccentSoft" Value="#2660A5FA" />
+        <Setter Property="Underline" Value="{StaticResource WorkUnderlineBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="controls:BoardCard">
+                    <Grid x:Name="Root" Shadow="{StaticResource CardShadow}" Translation="0,0,18">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="GlassStates">
+                                <VisualState x:Name="GlassOn" />
+                                <VisualState x:Name="GlassOff">
+                                    <VisualState.Setters>
+                                        <Setter Target="GlassLayer.Visibility" Value="Collapsed" />
+                                        <Setter Target="SolidLayer.Visibility" Value="Visible" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+
+                        <Border x:Name="GlassLayer" Background="{StaticResource CardGlassBrush}" CornerRadius="16" />
+                        <Border x:Name="SolidLayer" Background="{StaticResource CardSolidBrush}" CornerRadius="16" Visibility="Collapsed" />
+                        <!-- top highlight line, like light catching the glass edge -->
+                        <Border CornerRadius="16" BorderThickness="0,1,0,0" BorderBrush="#33FFFFFF" Margin="1,0,1,0" IsHitTestVisible="False" />
+
+                        <Border BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="16" Padding="16,12,16,12">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border Width="32" Height="32" CornerRadius="9" Background="{TemplateBinding AccentSoft}" VerticalAlignment="Center">
+                                        <FontIcon Glyph="{TemplateBinding Icon}" FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="{TemplateBinding Accent}" />
+                                    </Border>
+
+                                    <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{TemplateBinding Title}" Style="{StaticResource CardTitleText}" />
+                                        <Rectangle Height="3" RadiusX="1.5" RadiusY="1.5" Fill="{TemplateBinding Underline}" Margin="2,1,6,0"
+                                                   HorizontalAlignment="Stretch" Opacity="0.9" RenderTransformOrigin="0,0.5">
+                                            <Rectangle.RenderTransform>
+                                                <RotateTransform Angle="-1.4" />
+                                            </Rectangle.RenderTransform>
+                                        </Rectangle>
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Column="2" Text="{TemplateBinding Subtitle}" Style="{StaticResource MutedText}" Margin="10,0,0,0"
+                                               VerticalAlignment="Center" FontSize="12.5" Opacity="0.9" />
+
+                                    <ContentControl Grid.Column="3" Content="{TemplateBinding HeaderContent}" VerticalAlignment="Center" Margin="8,0,0,0" IsTabStop="False" HorizontalContentAlignment="Stretch" />
+                                </Grid>
+
+                                <ContentPresenter Grid.Row="1"
+                                                  Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="controls:BoardCard" BasedOn="{StaticResource BoardCardStyle}" />
+
+    <!-- Personal-side cards: same shape, coral/orange accents. -->
+    <Style x:Key="PersonalCard" TargetType="controls:BoardCard" BasedOn="{StaticResource BoardCardStyle}">
+        <Setter Property="Accent" Value="{StaticResource PersonalAccentBrush}" />
+        <Setter Property="AccentSoft" Value="#26FB7185" />
+        <Setter Property="Underline" Value="{StaticResource PersonalUnderlineBrush}" />
+    </Style>
+</ResourceDictionary>

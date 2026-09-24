@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="DesktopBoard.App.Controls.StickyBoardControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:DesktopBoard.App.ViewModels"
+    xmlns:fx="using:DesktopBoard.App.Converters"
+    FlowDirection="LeftToRight"
+    IsTabStop="False">
+
+    <UserControl.Resources>
+        <ThemeShadow x:Key="StickyShadow" />
+    </UserControl.Resources>
+
+    <Grid x:Name="Root" SizeChanged="Root_SizeChanged" MinHeight="96">
+        <ItemsControl ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <Canvas />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:StickyNoteViewModel">
+                    <Grid Width="{x:Bind Width, Mode=OneWay}" Height="{x:Bind Height, Mode=OneWay}"
+                          RenderTransformOrigin="0.5,0.5"
+                          Shadow="{StaticResource StickyShadow}" Translation="0,0,12"
+                          ManipulationMode="{x:Bind fx:Fx.DragMode(Owner.IsEditMode), Mode=OneWay}"
+                          ManipulationStarted="Sticky_ManipulationStarted"
+                          ManipulationDelta="Sticky_ManipulationDelta"
+                          ManipulationCompleted="Sticky_ManipulationCompleted"
+                          Tag="{x:Bind}"
+                          Background="Transparent">
+                        <Grid.RenderTransform>
+                            <CompositeTransform Rotation="{x:Bind Rotation, Mode=OneWay}"
+                                                TranslateX="{x:Bind X, Mode=OneWay}"
+                                                TranslateY="{x:Bind Y, Mode=OneWay}" />
+                        </Grid.RenderTransform>
+
+                        <Border Background="{x:Bind fx:Fx.StickyBrush(Color), Mode=OneWay}" CornerRadius="3" />
+                        <!-- a faint fold at the bottom corner -->
+                        <Border Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#22000000" CornerRadius="8,0,3,0" />
+
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <!-- drag strip with color / delete (edit mode only) -->
+                            <Grid Height="20" Background="#12000000" CornerRadius="3,3,0,0"
+                                  Visibility="{x:Bind fx:Fx.Vis(Owner.IsEditMode), Mode=OneWay}">
+                                <Button Style="{StaticResource IconButton}" Width="20" Height="20" FontSize="10" Foreground="#334155" CornerRadius="3"
+                                        HorizontalAlignment="Left" Content="&#xE790;" Command="{x:Bind CycleColorCommand}" ToolTipService.ToolTip="Color" />
+                                <FontIcon Glyph="&#xE76F;" FontFamily="{StaticResource IconFont}" FontSize="9" Foreground="#66334155" HorizontalAlignment="Center" />
+                                <Button Style="{StaticResource IconButton}" Width="20" Height="20" FontSize="10" Foreground="#334155" CornerRadius="3"
+                                        HorizontalAlignment="Right" Content="&#xE711;" Command="{x:Bind DeleteCommand}" ToolTipService.ToolTip="Delete" />
+                            </Grid>
+
+                            <TextBlock Grid.Row="1" Text="{x:Bind Content, Mode=OneWay}" TextWrapping="Wrap" TextAlignment="Center" FlowDirection="RightToLeft"
+                                       Foreground="#1F2937" FontFamily="{StaticResource BoardFont}" FontSize="14" FontWeight="SemiBold"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" Padding="8,4,8,6" TextTrimming="CharacterEllipsis"
+                                       Visibility="{x:Bind fx:Fx.VisNot(Owner.IsEditMode), Mode=OneWay}" />
+                            <TextBox Grid.Row="1" Text="{x:Bind Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource GhostTextArea}" Foreground="#1F2937" FontSize="14" FontWeight="SemiBold"
+                                     TextAlignment="Center" Padding="6,2,6,4" SelectionHighlightColor="#5533415A" FlowDirection="RightToLeft"
+                                     Visibility="{x:Bind fx:Fx.Vis(Owner.IsEditMode), Mode=OneWay}" />
+                        </Grid>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- "+" tile for a new idea (edit mode only) -->
+        <Button Command="{x:Bind ViewModel.AddCommand, Mode=OneWay}" Width="96" Height="80" HorizontalAlignment="Right" VerticalAlignment="Top"
+                Margin="0,6,8,0" Background="#0DFFFFFF" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8"
+                Visibility="{x:Bind fx:Fx.Vis(ViewModel.IsEditMode), Mode=OneWay}">
+            <FontIcon Glyph="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="20" Foreground="{StaticResource TextSecondaryBrush}" />
+        </Button>
+    </Grid>
+</UserControl>

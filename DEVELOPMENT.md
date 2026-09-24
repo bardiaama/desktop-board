@@ -1,0 +1,173 @@
+# Desktop Board — Development Notes
+
+Desktop Board turns the Windows desktop into a persistent, glassmorphic productivity
+whiteboard (Work / کاری on the left, Personal / شخصی on the right). It is a WinUI 3
+(Windows App SDK 1.8) unpackaged desktop app on .NET 8, with SQLite persistence.
+
+## Solution layout
+
+```
+DesktopBoard.sln
+Directory.Build.props              nullable + implicit usings for every project
+src/
+  DesktopBoard.Core/               net8.0      models, interfaces, pure services (no UI, no Win32)
+    Models/                        entities, enums, SettingKeys, SeedData, BoardSnapshot
+    Interfaces/                    IRepository<T> + per-entity repos, ISettingsService,
+                                   IBoardStateService, IBackupService, IDesktopHostService,
+                                   IStartupService, ISystemWallpaperService
+    Services/                      BoardStateService, SettingsService, Debouncer,
+                                   SortOrderHelper, Logger
+  DesktopBoard.Data/               net8.0      Microsoft.Data.Sqlite
+    SQLite/SqliteDatabase.cs       single serialized connection (WAL), value helpers
+    Migrations/Migrations.cs       IMigration + MigrationRunner + Migration001Initial
+    Repositories/                  RepositoryBase<T> + Task/Goal/Project/Meeting/Note/
+                                   StickyNote/Settings repositories
+    BackupService.cs               JSON package export / import (BoardSnapshot)
+    DatabaseInitializer.cs         migrations + first-run seed
+  DesktopBoard.Windows/            net8.0-windows   Win32 only
+    DesktopIntegration/            WorkerWLocator, DesktopHostService
+    NativeInterop/                 NativeMethods (user32), FileDialogs (comdlg32)
+    Startup/StartupService.cs      HKCU Run key
+    Wallpaper/                     SystemWallpaperService (SPI_GETDESKWALLPAPER)
+  DesktopBoard.App/                net8.0-windows10.0.19041.0   WinUI 3, MVVM
+    Views/                         BoardView (the whole board), SettingsDialog
+    ViewModels/                    MainViewModel + one VM per card / row
+    Controls/                      BoardCard (templated), ChecklistControl,
+                                   StickyBoardControl, LockToggle
+    Converters/Fx.cs               static x:Bind functions
+    Styles/                        Colors, Typography, Controls, Cards
+    Services/                      UiStrings (fa / en / bilingual), WallpaperImageService
+tests/
+  DesktopBoard.Tests/              xunit: migrations, repositories, backup, Debouncer,
+                                   BoardStateService, SortOrderHelper (12 tests)
+```
+
+Dependency direction: `App → Windows → Core`, `App → Data → Core`. Core has no
+package references. UI never touches SQLite directly; Win32 never leaks past
+`DesktopBoard.Windows`.
+
+## Build
+
+Requirements: Windows 10 1809+ (Windows 11 recommended), .NET SDK 8.0.4xx, internet for
+the first NuGet restore. Visual Studio is **not** required — the Windows App SDK NuGet
+package brings its own XAML compiler and the Windows SDK projection comes from NuGet.
+
+```powershell
+dotnet test tests/DesktopBoard.Tests                         # unit tests
+dotnet build src/DesktopBoard.App -c Debug   -p:Platform=x64
+dotnet build src/DesktopBoard.App -c Release -p:Platform=x64
+# output: src/DesktopBoard.App/bin/x64/Release/net8.0-windows10.0.19041.0/win-x64/DesktopBoard.exe
+```
+
+The app is unpackaged (`WindowsPackageType=None`) and ships the Windows App SDK runtime
+next to the exe (`WindowsAppSDKSelfContained=true`), so the only machine prerequisite is
+the .NET 8 Desktop Runtime. It runs as the invoking user; no administrator rights.
+
+Debug switches (command line):
+
+- `--host=normal|bottommost|embedded|auto` overrides the desktop mode for one run.
+- `--size=1920x1080` previews the layout at another resolution in a normal window.
+
+Data lives in `%LOCALAPPDATA%\DesktopBoard\` (`board.db`, `desktopboard.log`).
+
+## Architecture notes
+
+- **MVVM**: CommunityToolkit.Mvvm `ObservableObject` / `[ObservableProperty]`; views use
+  compiled `x:Bind` with static helper functions in `Converters/Fx.cs`. DI is
+  `Microsoft.Extensions.DependencyInjection`, composed in `App.xaml.cs`.
+- **Autosave**: every edit persists automatically. Text edits go through `Debouncer`
+  (600–700 ms after the last keystroke); checkbox, color, reorder and drag-end writes
+  are immediate. `MainViewModel.FlushAsync()` writes pending debounced edits on exit
+  (the window cancels its first close, flushes, then closes).
+- **Lock / edit**: `IBoardStateService` is the single source of truth. In LOCKED mode the
+  whole body grid has `IsHitTestVisible=false`, so no click can reach any control; the
+  header's lock pill is the only interactive element. Unlocking is a press-and-hold
+  (650 ms, configurable off); locking is a click. `Ctrl+Shift+L` toggles, `Ctrl+Esc`
+  locks. Default state on launch is LOCKED (setting `board.defaultLocked`).
+- **Data model**: `Tasks` (Section × Category: Today / ThisWeek / Future), `Goals`,
+  `Projects`, `Meetings`, `Notes` (one per section), `StickyNotes` (position, size,
+  rotation, color), `AppSettings` (key/value), `SchemaVersion`. Dates are ISO strings,
+  times are `HH:mm`, everything is UTF-8. New schema steps are added as `IMigration`
+  classes with increasing versions; `MigrationRunner` applies them in a transaction.
+- **Backup**: JSON package of a `BoardSnapshot`. The same DTO is the intended payload for
+  a future sync service; import replaces all board data (settings are merged).
+- **Wallpaper**: by default the board draws the user's current Windows wallpaper, so
+  the embedded window looks like part of the desktop. The image is decoded once at
+  ≤1280 px and box-blurred on the CPU (three passes) according to the blur setting; the
+  darkness overlay is a simple rectangle. Cards use in-app `AcrylicBrush` (can be turned
+  off in Settings for low-end machines).
+- **UI scale**: the board is laid out at a virtual 1080 px height and rendered through a
+  `ScaleTransform`. With no explicit setting the scale follows the screen height
+  (1440p → 1.33, 1080p → 1.0, minimum 0.85); the Settings slider overrides it.
+- **Persian**: all labels live in `UiStrings` (bilingual / fa / en). Row layout is
+  left-to-right like the design (checkbox left, meta right) while every text element
+  runs `FlowDirection=RightToLeft` for correct bidi of mixed Persian + English titles.
+  `TextAlignment` in WinUI is logical (Left = start), which `Fx.Align` accounts for.
+  The header shows the Jalali date (`PersianCalendar`) with Persian digits.
+
+## Windows desktop integration (the important decisions)
+
+Goal: desktop icons **above** the board, board **above** the wallpaper, all normal windows
+above both, and the board must survive "Show desktop".
+
+`DesktopHostService.Attach` tries, in order:
+
+1. **Embedded** — `WorkerWLocator` sends Progman the undocumented `0x052C` message, which
+   makes the shell create a `WorkerW` window behind the icon view, then re-parents our
+   HWND into it (`WS_CHILD`, `SetParent`, `HWND_BOTTOM`). Two shell layouts are handled:
+   - classic (Windows 7 – 11 23H2): top-level `WorkerW` siblings of Progman; the
+     wallpaper WorkerW is the one *after* the WorkerW that hosts `SHELLDLL_DefView`;
+   - Windows 11 24H2+: `SHELLDLL_DefView` and one `WorkerW` **per monitor** are children
+     of Progman. We parent into that WorkerW (verified on this machine, build 26200).
+   If no WorkerW exists we parent into Progman itself and rely on `HWND_BOTTOM`.
+   Cross-process `SetParent` attaches input queues, so the board keeps receiving mouse
+   and keyboard input.
+2. **BottomMost** — fallback: a normal top-level tool window pinned to the bottom of the
+   Z-order by intercepting `WM_WINDOWPOSCHANGING`; minimize requests are swallowed.
+   Desktop icons are covered in this mode.
+3. **Normal** — a plain borderless window (also what `--size=` uses).
+
+The mode is a setting (`desktop.hostMode`, default `auto`); changing it needs a restart.
+
+After attaching, the window is subclassed (`GWLP_WNDPROC`) and `WM_DISPLAYCHANGE` /
+`WM_DPICHANGED` re-fit the board to the primary monitor and re-parent it if explorer
+recreated its WorkerW. `AppWindow` becomes unusable after re-parenting, so the window
+is configured (borderless presenter, size, switcher visibility) *before* `Attach`.
+
+WinUI-specific gotchas met on the way (all fixed in code, kept here to save the next
+person a day):
+
+- A `ContentPresenter` whose `Content` is template-bound to a `null` property crashes
+  layout with `E_INVALIDARG` ("Value does not fall within the expected range") and
+  takes the process down. Use a `ContentControl` for optional slots.
+- A `TransitionCollection` in a `Style` setter is shared between controls and throws the
+  same error. Set transitions per element or not at all.
+- `DesktopBoard.Windows` shadows the `Windows.*` namespaces inside `DesktopBoard.App`;
+  use `global::Windows.…`.
+- `ReleasePointerCapture` synchronously raises `PointerCaptureLost`; read state before
+  releasing.
+
+## Startup with Windows
+
+`StartupService` writes `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DesktopBoard`
+= `"<exe>" --autostart`. Per user, no elevation, visible in Task Manager → Startup. The
+first run asks for consent (onboarding dialog); the Settings toggle changes it later.
+
+## Known limitations
+
+- Primary monitor only. Secondary monitors keep the plain wallpaper.
+- Display changes are handled by re-fitting; if explorer *destroys* the WorkerW that hosts
+  the board (rare, e.g. explorer restart), the board window is destroyed with it and the
+  app must be started again. A watchdog / explorer-restart detection is a follow-up.
+- In Embedded mode the board is a child of an explorer-owned window; WinRT pickers cannot
+  own dialogs from it, so the classic Win32 open/save dialogs are used.
+- Text in LOCKED mode is not selectable (by design: nothing on the body is hit-testable).
+- The Segoe UI Variable / Segoe UI fonts render Persian well but a dedicated Persian
+  face (e.g. Vazirmatn) would look better; bundling one is a follow-up.
+- Reordering by drag works for tasks, goals and projects; cards themselves are fixed.
+
+## Roadmap hooks
+
+`BoardSnapshot` for sync, `IMigration` for schema evolution, `IDesktopHostService` for
+replacing the shell integration, `UiStrings` for languages, `TaskCategory` and
+`Meeting.Date` for calendar features, `SettingKeys` for new settings.
